@@ -1,0 +1,58 @@
+# 30분마다 시세·이슈를 받고(레이더는 3시간마다) gh-pages 가지에 화면+자료를 새로 올린다.
+# gh-pages 는 매번 옛 기록 없이 덮어써서(force push) 저장소가 커지지 않는다. 레이더 기록은 그 안 radar/state.json 에 이어 쌓인다.
+name: collect
+
+on:
+  schedule:
+    - cron: "7,37 * * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: collect
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 지난 자료 가져오기
+        uses: actions/checkout@v4
+        continue-on-error: true  # 첫 실행엔 gh-pages 가 없다
+        with:
+          ref: gh-pages
+          path: site
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: 자료 받기
+        env:
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          TZ: Asia/Seoul
+        run: python collect.py --out site
+
+      - name: 화면과 자료 올리기
+        env:
+          TZ: Asia/Seoul
+        run: |
+          cp index.html radar.html style.css site/
+          cd site
+          rm -rf .git
+          touch .nojekyll
+          git init -q -b gh-pages
+          git add -A
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -q -m "자료 $(date '+%Y-%m-%d %H:%M')"
+          git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" gh-pages

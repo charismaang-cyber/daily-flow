@@ -1,0 +1,46 @@
+{
+  "trend_minutes": 30,
+  "trend_geos": [["KR", "한국"], ["US", "미국"]],
+  "radar": {
+    "snap_hours": 3,
+    "max_channels": 4000,
+    "regions": [["KR", "한국"], ["US", "해외(미국)"]],
+    "seed_channels": []
+  },
+  "groups": [
+    {"id": "fx", "title": "환율", "en": "EXCHANGE", "items": [
+      {"t": "KRW=X", "name": "원/달러", "dp": 2},
+      {"t": "JPYKRW=X", "name": "원/100엔", "dp": 2, "mul": 100},
+      {"t": "EURKRW=X", "name": "원/유로", "dp": 2},
+      {"t": "KRWCNY=X", "name": "원/위안", "dp": 2, "inv": true}
+    ]},
+    {"id": "kr", "title": "한국 증시", "en": "KOREA", "items": [
+      {"t": "^KS11", "name": "코스피", "dp": 2},
+      {"t": "^KQ11", "name": "코스닥", "dp": 2},
+      {"t": "005930.KS", "name": "삼성전자", "dp": 0},
+      {"t": "000660.KS", "name": "SK하이닉스", "dp": 0},
+      {"t": "005380.KS", "name": "현대차", "dp": 0},
+      {"t": "035420.KS", "name": "NAVER", "dp": 0}
+    ]},
+    {"id": "usidx", "title": "미국 지수", "en": "US INDEX", "items": [
+      {"t": "^GSPC", "name": "S&P 500", "dp": 2},
+      {"t": "^IXIC", "name": "나스닥", "dp": 2},
+      {"t": "^DJI", "name": "다우존스", "dp": 2},
+      {"t": "^SOX", "name": "필라델피아 반도체", "dp": 2}
+    ]},
+    {"id": "us", "title": "미국 종목", "en": "US STOCKS", "items": [
+      {"t": "NVDA", "name": "엔비디아", "dp": 2, "pre": "$"},
+      {"t": "AAPL", "name": "애플", "dp": 2, "pre": "$"},
+      {"t": "MSFT", "name": "마이크로소프트", "dp": 2, "pre": "$"},
+      {"t": "TSLA", "name": "테슬라", "dp": 2, "pre": "$"},
+      {"t": "GOOGL", "name": "알파벳", "dp": 2, "pre": "$"},
+      {"t": "AMZN", "name": "아마존", "dp": 2, "pre": "$"}
+    ]},
+    {"id": "etc", "title": "원자재·코인·금리", "en": "OTHERS", "items": [
+      {"t": "GC=F", "name": "금 (온스)", "dp": 1, "pre": "$"},
+      {"t": "CL=F", "name": "WTI 유가", "dp": 2, "pre": "$"},
+      {"t": "BTC-USD", "name": "비트코인", "dp": 0, "pre": "$"},
+      {"t": "^TNX", "name": "미 10년물 금리", "dp": 3, "suf": "%"}
+    ]}
+  ]
+}

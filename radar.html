@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>채널 레이더</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Noto+Sans+KR:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:14px 0 12px;border-bottom:1px solid var(--line)}
+.seg{display:inline-flex;gap:3px;padding:3px;border-radius:12px;background:var(--card-solid);border:1px solid var(--line)}
+.seg button{border:0;background:transparent;font:inherit;font-size:12.5px;padding:5px 12px;border-radius:9px;cursor:pointer;color:var(--ink2);white-space:nowrap}
+.seg button.on{background:var(--sky2);color:var(--ink);font-weight:700}
+.sel,.search{font:inherit;font-size:12.5px;color:var(--ink);background:var(--card-solid);border:1px solid var(--line);border-radius:12px;padding:7px 10px}
+.search{min-width:0;flex:1 1 160px}
+.chip{border:1px solid var(--line);background:var(--card-solid);color:var(--ink2);font:inherit;font-size:12px;padding:4px 10px;border-radius:999px;cursor:pointer;white-space:nowrap}
+.chip.on{background:var(--ink);color:var(--card-solid);border-color:var(--ink);font-weight:700}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.banner{margin:12px 0 0;padding:10px 14px;border-radius:12px;background:var(--chip);color:var(--chip-ink);font-size:12.5px;font-weight:500}
+.banner:empty{display:none}
+
+.ch{display:grid;grid-template-columns:30px 44px minmax(0,1fr) 34px 128px 96px 30px;gap:12px;align-items:center;padding:11px 0;border-bottom:1px solid var(--line)}
+.ch:last-child{border-bottom:0}
+.ch .av{width:44px;height:44px;border-radius:50%;object-fit:cover;background:var(--line)}
+.ch .nm{font-weight:800;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ch .nm a:hover{text-decoration:underline}
+.ch .meta{font-size:12px;color:var(--ink3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ch .gain{text-align:right;font-variant-numeric:tabular-nums}
+.ch .gain b{display:block;font-size:16px;font-weight:800;color:var(--up)}
+.ch .gain b.zero{color:var(--ink3)}
+.ch .gain span{font-size:11.5px;color:var(--ink3)}
+.ch svg{width:96px;height:30px;display:block}
+.star{border:0;background:transparent;cursor:pointer;font-size:18px;color:var(--ink3);padding:0}
+.star.on{color:#e8b730}
+.gd{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;font-weight:800;font-size:13px;color:#fff;font-family:"Cormorant Garamond",serif;font-size:17px}
+.gS{background:#d6404a}.gA{background:#e0803a}.gB{background:#c9a227}.gC{background:#4f9a6a}.gD{background:#4a7fc9}.gF{background:#9a95ad}.gN{background:transparent;border:1px dashed var(--line);color:var(--ink3);font-size:12px}
+.more{display:block;margin:14px auto 0;border:1px solid var(--line);background:var(--card-solid);color:var(--ink2);font:inherit;font-weight:700;padding:9px 20px;border-radius:12px;cursor:pointer}
+
+.vids{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:18px;padding-top:16px}
+.vc{display:block;border-radius:16px;overflow:hidden;background:var(--card-solid);border:1px solid var(--line)}
+.vc .im{position:relative;aspect-ratio:16/9;background:var(--line)}
+.vc .im img{width:100%;height:100%;object-fit:cover;display:block}
+.vc .du{position:absolute;right:6px;bottom:6px;background:rgba(0,0,0,.75);color:#fff;font-size:11px;font-weight:700;padding:1px 6px;border-radius:6px}
+.vc .bd{padding:10px 12px 12px}
+.vc .t{font-weight:700;font-size:13.5px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:2.9em}
+.vc .m{font-size:12px;color:var(--ink3);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vc .x{font-family:"Cormorant Garamond",serif;font-style:italic;font-weight:600;font-size:19px;color:var(--accent);margin-left:6px}
+
+.kws{display:flex;flex-wrap:wrap;gap:8px;padding-top:14px}
+.kw{border:1px solid var(--line);background:var(--card-solid);border-radius:999px;padding:6px 12px;cursor:pointer;font:inherit;color:var(--ink);display:inline-flex;gap:6px;align-items:baseline}
+.kw b{font-weight:800}
+.kw small{color:var(--ink3);font-size:11px}
+.kw.top{background:var(--sky2)}
+.kw.on{background:var(--ink);color:var(--card-solid)}
+.kw.on small{color:var(--card-solid)}
+
+@media (max-width:760px){
+  .ch{grid-template-columns:24px 40px minmax(0,1fr) 30px 96px 24px;gap:8px}
+  .ch svg{display:none}
+  .ch .av{width:40px;height:40px}
+  .vids{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+  .vc .x{font-size:16px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <aside class="card side sparkle">
+    <div class="logo">
+      <svg viewBox="0 0 64 64" aria-hidden="true">
+        <circle cx="32" cy="34" r="22" fill="var(--sky2)"/>
+        <polyline points="14,42 24,34 31,38 41,24 50,28" fill="none" stroke="var(--accent)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="41" cy="24" r="3.4" fill="var(--up)"/>
+        <text x="50" y="14" font-size="10" fill="var(--star)">✦</text>
+      </svg>
+      <div>
+        <div class="brand">Daily Flow</div>
+        <div class="brand-ko">오늘의 흐름</div>
+        <div class="brand-sub">✦ TREND · MARKET ✦</div>
+      </div>
+    </div>
+    <nav class="nav">
+      <a href="index.html">◎ 한눈에 보기</a>
+      <a href="index.html#trend">✧ 오늘의 이슈</a>
+      <a href="index.html#market">◔ 시세</a>
+      <a href="radar.html" class="on">◈ 채널 레이더 <span class="cnt" id="navPool"></span></a>
+    </nav>
+    <div class="side-foot">
+      <svg class="moon" viewBox="0 0 48 48" aria-hidden="true"><path d="M30 6a18 18 0 1 0 12 30A16 16 0 0 1 30 6z" fill="#f3d98b"/></svg>
+      <div class="upd">레이더 기록<br><b id="rdAt">—</b></div>
+      <div class="dots">● ● ● ● ● ● ● ● ●</div>
+      <div class="theme" role="group" aria-label="화면 밝기">
+        <button data-t="light" title="밝게">☀</button>
+        <button data-t="dark" title="어둡게">☾</button>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main" id="top">
+    <section class="card hero sparkle">
+      <div class="trail"></div>
+      <div>
+        <div class="eyebrow">CHANNEL RADAR · <span id="today"></span></div>
+        <h1>채널 레이더<em>find the rising</em></h1>
+        <div class="sum" id="summary">불러오는 중…</div>
+        <div class="note" id="note">분야별 인기 영상에서 채널을 모아 3시간마다 조회수·구독자를 기록해요.</div>
+      </div>
+      <div class="seg" id="regTabs" style="margin-left:auto;flex-shrink:0"></div>
+    </section>
+
+    <div class="sec-h" id="rising">
+      <div><span class="eyebrow">RISING CHANNELS</span><h2>급상승 채널<em id="chCnt"></em></h2></div>
+      <div class="at" title="등급 = 하루 조회수 증가 ÷ 구독자 · S 1배↑ · A 0.3 · B 0.1 · C 0.03 · D 0.01 · F 그 아래">등급 기준 ⓘ</div>
+    </div>
+    <section class="card panel sparkle">
+      <div class="bar">
+        <div class="seg" id="period">
+          <button data-p="d1" class="on">일간</button><button data-p="w1">주간</button><button data-p="subs">구독자순</button>
+        </div>
+        <select class="sel" id="minSubs" aria-label="최소 구독자">
+          <option value="0">구독자 전체</option><option value="1000">1천 이상</option><option value="10000">1만 이상</option>
+          <option value="100000">10만 이상</option><option value="1000000">100만 이상</option>
+          <option value="-100000">10만 이하</option>
+        </select>
+        <select class="sel" id="chCat" aria-label="분야"><option value="all">분야 전체</option></select>
+        <div class="chips" id="grades"></div>
+        <input class="search" id="chQ" type="search" placeholder="채널 이름 찾기">
+        <button class="chip" id="noNews">뉴스 빼기</button>
+        <button class="chip" id="favOnly">★ 즐겨찾기만</button>
+      </div>
+      <div class="banner" id="chBanner"></div>
+      <div id="chList"></div>
+      <button class="more" id="chMore">더 보기</button>
+    </section>
+
+    <div class="sec-h" id="hot">
+      <div><span class="eyebrow">HOT VIDEOS</span><h2>지금 뜨는 영상<em id="vCnt"></em></h2></div>
+      <div class="at">배수 = 조회수 ÷ 채널 구독자</div>
+    </div>
+    <section class="card panel sparkle">
+      <div class="bar">
+        <div class="seg" id="vsort"><button data-s="x" class="on">구독자 대비</button><button data-s="v">조회수</button><button data-s="new">최신</button></div>
+        <div class="seg" id="vlen"><button data-l="all" class="on">전체</button><button data-l="short">3분 이하</button><button data-l="long">롱폼</button></div>
+        <input class="search" id="vQ" type="search" placeholder="제목 낱말 찾기">
+      </div>
+      <div class="chips" id="cats" style="padding-top:12px"></div>
+      <div class="vids" id="vids"></div>
+      <button class="more" id="vMore">더 보기</button>
+    </section>
+
+    <div class="sec-h" id="kw">
+      <div><span class="eyebrow">WEEKLY KEYWORDS</span><h2>주간 인기 키워드<em id="kwCnt"></em></h2></div>
+      <div class="at" id="kwNote"></div>
+    </div>
+    <section class="card panel sparkle">
+      <div class="note" style="font-size:12.5px;color:var(--ink3)">인기 영상 제목에 여러 번 나온 말이에요. 누르면 위 「지금 뜨는 영상」에서 그 말이 든 영상만 보여요.</div>
+      <div class="kws" id="kws"></div>
+    </section>
+    <div class="foot">자료: YouTube Data API · 채널 목록은 분야별 인기 영상에서 저절로 모아요</div>
+  </main>
+</div>
+
+<script>
+const root = document.documentElement;
+function setTheme(t){ root.dataset.theme = t; try{localStorage.setItem("theme",t)}catch(e){}
+  document.querySelectorAll(".theme button").forEach(b=>b.classList.toggle("on",b.dataset.t===t)); }
+let saved = null; try{saved = localStorage.getItem("theme")}catch(e){}
+setTheme(saved || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
+document.querySelectorAll(".theme button").forEach(b=>b.onclick=()=>setTheme(b.dataset.t));
+
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function kor(n){  // 1.2억 · 35만 · 8,200
+  if(n==null) return "—";
+  const a = Math.abs(n), s = n < 0 ? "-" : "";
+  if(a >= 1e8) return s + (a/1e8).toFixed(a >= 1e9 ? 0 : 1) + "억";
+  if(a >= 1e4) return s + (a >= 1e5 ? Math.round(a/1e4) : (a/1e4).toFixed(1)) + "만";
+  return s + Math.round(a).toLocaleString("ko-KR");
+}
+const plus = n => n==null ? "—" : (n > 0 ? "+" : "") + kor(n);
+function ago(iso){
+  const h = (Date.now() - new Date(iso)) / 36e5;
+  return h < 1 ? "방금" : h < 24 ? `${Math.floor(h)}시간 전` : h < 24*30 ? `${Math.floor(h/24)}일 전` : `${Math.floor(h/24/30)}달 전`;
+}
+const dur = s => s==null ? "" : s >= 3600 ? `${Math.floor(s/3600)}:${String(Math.floor(s%3600/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}` : `${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}`;
+function spark(vals, w, h){
+  if(!vals || vals.length < 2) return `<svg viewBox="0 0 ${w} ${h}" aria-hidden="true"></svg>`;
+  const mn = Math.min(...vals, 0), mx = Math.max(...vals), r = (mx-mn)||1;
+  const pts = vals.map((v,i)=>`${(i/(vals.length-1)*w).toFixed(1)},${(h-3-(v-mn)/r*(h-6)).toFixed(1)}`).join(" ");
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></svg>`;
+}
+
+let R = null, reg = null;
+const S = {p:"d1", min:0, cat:"all", noNews:false, grades:new Set(), q:"", fav:false, n:50, vs:"x", vl:"all", vc:"all", vq:"", vn:24};
+let favs = new Set(); try{ favs = new Set(JSON.parse(localStorage.getItem("radar_fav")||"[]")); }catch(e){}
+const saveFav = () => { try{ localStorage.setItem("radar_fav", JSON.stringify([...favs])); }catch(e){} };
+
+function seg(id, key, attr){
+  document.querySelectorAll(`#${id} button`).forEach(b=>b.onclick=()=>{
+    S[key] = b.dataset[attr]; S.n = 50; S.vn = 24;
+    document.querySelectorAll(`#${id} button`).forEach(x=>x.classList.toggle("on", x===b)); render();
+  });
+}
+seg("period","p","p"); seg("vsort","vs","s"); seg("vlen","vl","l");
+document.getElementById("minSubs").onchange = e => { S.min = +e.target.value; S.n = 50; render(); };
+document.getElementById("chQ").oninput = e => { S.q = e.target.value.trim().toLowerCase(); S.n = 50; render(); };
+document.getElementById("vQ").oninput = e => { S.vq = e.target.value.trim().toLowerCase(); S.vn = 24; render(); };
+document.getElementById("favOnly").onclick = e => { S.fav = !S.fav; e.target.classList.toggle("on", S.fav); render(); };
+document.getElementById("noNews").onclick = e => { S.noNews = !S.noNews; e.target.classList.toggle("on", S.noNews); S.n = 50; render(); };
+document.getElementById("chCat").onchange = e => { S.cat = e.target.value; S.n = 50; render(); };
+document.getElementById("chMore").onclick = () => { S.n += 50; render(); };
+document.getElementById("vMore").onclick = () => { S.vn += 24; render(); };
+document.getElementById("grades").innerHTML = ["S","A","B","C","D","F"].map(g=>`<button class="chip" data-g="${g}">${g}</button>`).join("");
+document.querySelectorAll("#grades button").forEach(b=>b.onclick=()=>{
+  S.grades.has(b.dataset.g) ? S.grades.delete(b.dataset.g) : S.grades.add(b.dataset.g);
+  b.classList.toggle("on"); S.n = 50; render();
+});
+
+function renderChannels(D){
+  const p = S.p, gainKey = p, subKey = p==="w1" ? "sw1" : "s1";
+  const ready = p==="subs" || D.channels.some(c=>c[p]!=null);
+  let list = D.channels.filter(c=>{
+    if(S.min > 0 && !(c.subs >= S.min)) return false;
+    if(S.min < 0 && !(c.subs >= 0 && c.subs <= -S.min)) return false;
+    if(S.cat!=="all" && !(c.cats||[]).includes(S.cat)) return false;
+    if(S.noNews && (c.cats||[]).includes("25")) return false;
+    if(S.grades.size && !S.grades.has(c.g)) return false;
+    if(S.q && !c.t.toLowerCase().includes(S.q)) return false;
+    if(S.fav && !favs.has(c.id)) return false;
+    return true;
+  });
+  const key = (!ready || p==="subs") ? (c=>c.subs) : (c=>c[gainKey] ?? -Infinity);
+  list.sort((a,b)=>key(b)-key(a));
+  document.getElementById("chCnt").textContent = list.length.toLocaleString("ko-KR");
+  const until = p==="w1" ? R.weekly_from : R.daily_from;
+  document.getElementById("chBanner").textContent = ready ? "" :
+    `기록 쌓는 중이에요 — ${p==="w1"?"주간":"일간"} 순위는 ${until} 이후 나와요. 지금은 구독자 순으로 보여요.`;
+  document.getElementById("chList").innerHTML = list.slice(0, S.n).map((c,i)=>{
+    const g = ready && p!=="subs" ? c[gainKey] : null, sg = ready && p!=="subs" ? c[subKey] : null;
+    const url = c.cu ? `https://www.youtube.com/${encodeURIComponent(c.cu)}` : `https://www.youtube.com/channel/${c.id}`;
+    return `<div class="ch"><div class="rank">${i+1}</div>
+      <img class="av" src="${esc(c.th)}" alt="" loading="lazy" referrerpolicy="no-referrer">
+      <div style="min-width:0"><div class="nm"><a href="${url}" target="_blank" rel="noopener">${esc(c.t)}</a></div>
+        <div class="meta">구독자 ${c.subs<0?"비공개":kor(c.subs)} · 영상 ${c.n.toLocaleString("ko-KR")}개 · 총 ${kor(c.views)}회${c.pub?` · ${c.pub.slice(0,4)}년 개설`:""}</div></div>
+      <div class="gd g${c.g||"N"}" title="하루 조회수 증가 ÷ 구독자">${c.g||"–"}</div>
+      <div class="gain">${p==="subs" || !ready ? `<b class="zero">${kor(c.subs)}</b><span>구독자</span>`
+        : `<b class="${g>0?"":"zero"}">${plus(g)}</b><span>${p==="w1"?"7일":"하루"} 조회수 · 구독 ${plus(sg)}</span>`}</div>
+      ${spark(c.ser, 96, 30)}
+      <button class="star ${favs.has(c.id)?"on":""}" data-id="${c.id}" title="즐겨찾기">${favs.has(c.id)?"★":"☆"}</button></div>`;
+  }).join("") || `<div class="empty">조건에 맞는 채널이 없어요</div>`;
+  document.getElementById("chMore").style.display = list.length > S.n ? "" : "none";
+  document.querySelectorAll("#chList .star").forEach(b=>b.onclick=()=>{
+    favs.has(b.dataset.id) ? favs.delete(b.dataset.id) : favs.add(b.dataset.id); saveFav(); render();
+  });
+}
+
+function renderVideos(D){
+  const cats = R.cats, present = new Set(D.videos.map(v=>v.cat));
+  document.getElementById("cats").innerHTML = [["all","전체"], ...Object.entries(cats).filter(([k])=>k!=="0" && present.has(k))]
+    .map(([k,n])=>`<button class="chip ${S.vc===k?"on":""}" data-c="${k}">${esc(n)}</button>`).join("");
+  document.querySelectorAll("#cats button").forEach(b=>b.onclick=()=>{ S.vc = b.dataset.c; S.vn = 24; render(); });
+  let list = D.videos.filter(v=>{
+    if(S.vc!=="all" && v.cat!==S.vc) return false;
+    if(S.vl==="short" && !(v.dur!=null && v.dur<=180)) return false;
+    if(S.vl==="long" && !(v.dur!=null && v.dur>180)) return false;
+    if(S.vq && !v.t.toLowerCase().includes(S.vq)) return false;
+    return true;
+  });
+  const key = S.vs==="x" ? (v=>v.x ?? -1) : S.vs==="v" ? (v=>v.v) : (v=>+new Date(v.pub));
+  list.sort((a,b)=>key(b)-key(a));
+  document.getElementById("vCnt").textContent = list.length.toLocaleString("ko-KR");
+  document.getElementById("vids").innerHTML = list.slice(0, S.vn).map(v=>`
+    <a class="vc" href="https://www.youtube.com/watch?v=${esc(v.id)}" target="_blank" rel="noopener">
+      <div class="im"><img src="${esc(v.th)}" alt="" loading="lazy">${v.dur!=null?`<span class="du">${dur(v.dur)}</span>`:""}</div>
+      <div class="bd"><div class="t">${esc(v.t)}</div>
+        <div class="m">${esc(v.ch)} · 구독자 ${v.subs==null||v.subs<0?"—":kor(v.subs)}</div>
+        <div class="m">조회수 ${kor(v.v)} · ${ago(v.pub)}${v.x!=null?`<span class="x">${v.x>=10?Math.round(v.x):v.x}×</span>`:""}</div></div></a>`).join("")
+    || `<div class="empty">조건에 맞는 영상이 없어요</div>`;
+  document.getElementById("vMore").style.display = list.length > S.vn ? "" : "none";
+}
+
+function renderKw(D){
+  document.getElementById("kwCnt").textContent = D.kw.length || "";
+  document.getElementById("kwNote").textContent = `최근 ${D.kw_days}일 · 인기 영상 ${D.kw_videos.toLocaleString("ko-KR")}개`;
+  document.getElementById("kws").innerHTML = D.kw.map(([w,n,vw],i)=>
+    `<button class="kw ${i<10?"top":""} ${S.vq===w.toLowerCase()?"on":""}" data-w="${esc(w)}" title="조회수 합 ${kor(vw)}"><b>${esc(w)}</b><small>${n}편</small></button>`).join("")
+    || `<div class="empty">아직 모인 낱말이 없어요</div>`;
+  document.querySelectorAll("#kws .kw").forEach(b=>b.onclick=()=>{
+    const w = b.dataset.w.toLowerCase(); S.vq = S.vq===w ? "" : w; S.vn = 24;
+    document.getElementById("vQ").value = S.vq; render();
+    if(S.vq) document.getElementById("hot").scrollIntoView({behavior:"smooth"});
+  });
+}
+
+function render(){
+  if(!R) return;
+  const regs = Object.keys(R.regions);
+  if(!reg || !R.regions[reg]) reg = regs[0];
+  document.getElementById("regTabs").innerHTML = regs.map(r=>`<button data-r="${r}" class="${r===reg?"on":""}">${esc(R.regions[r].label)}</button>`).join("");
+  document.querySelectorAll("#regTabs button").forEach(b=>b.onclick=()=>{ reg = b.dataset.r; S.n = 50; S.vn = 24; S.vc = "all"; render(); });
+  const D = R.regions[reg];
+  const cs = document.getElementById("chCat");
+  if(cs.options.length === 1)
+    cs.innerHTML += Object.entries(R.cats).filter(([k])=>k!=="0").map(([k,n])=>`<option value="${k}">${esc(n)}</option>`).join("");
+  document.getElementById("today").textContent = new Date().toLocaleDateString("ko-KR",{year:"numeric",month:"long",day:"numeric",weekday:"short"});
+  document.getElementById("rdAt").textContent = R.at.slice(11);
+  document.getElementById("navPool").textContent = R.pool.toLocaleString("ko-KR");
+  document.getElementById("summary").innerHTML =
+    `기록 중인 채널 <b>${R.pool.toLocaleString("ko-KR")}</b>개 · 마지막 기록 ${esc(R.at.slice(5))} · 오늘 쓴 유닛 ${R.units_today}`;
+  document.getElementById("note").textContent =
+    `분야별 인기 영상에서 채널을 모아 3시간마다 조회수·구독자를 기록해요. 첫 기록 ${R.first.slice(5)} → 일간 순위 ${R.daily_from.slice(5)}부터, 주간 순위 ${R.weekly_from.slice(5)}부터.`;
+  renderChannels(D); renderVideos(D); renderKw(D);
+}
+
+function load(){
+  const s = document.createElement("script");
+  s.src = "radar/radar.js?" + Date.now();
+  s.onload = ()=>{ s.remove(); if(window.RADAR){ R = window.RADAR; render(); } };
+  s.onerror = ()=>{ s.remove(); document.getElementById("summary").textContent = "아직 레이더 기록이 없어요 — 깃허브가 첫 기록을 하면 채워져요"; };
+  document.head.appendChild(s);
+}
+load(); setInterval(load, 5*60000);
+</script>
+</body>
+</html>

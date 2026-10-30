@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>오늘의 흐름</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Noto+Sans+KR:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <aside class="card side sparkle">
+    <div class="logo">
+      <svg viewBox="0 0 64 64" aria-hidden="true">
+        <circle cx="32" cy="34" r="22" fill="var(--sky2)"/>
+        <polyline points="14,42 24,34 31,38 41,24 50,28" fill="none" stroke="var(--accent)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="41" cy="24" r="3.4" fill="var(--up)"/>
+        <text x="50" y="14" font-size="10" fill="var(--star)">✦</text>
+      </svg>
+      <div>
+        <div class="brand">Daily Flow</div>
+        <div class="brand-ko">오늘의 흐름</div>
+        <div class="brand-sub">✦ TREND · MARKET ✦</div>
+      </div>
+    </div>
+    <nav class="nav">
+      <a href="#top" class="on">◎ 한눈에 보기</a>
+      <a href="#trend">✧ 오늘의 이슈 <span class="cnt" id="navTrend"></span></a>
+      <a href="#market">◔ 시세 <span class="cnt" id="navMk"></span></a>
+      <a href="radar.html">◈ 채널 레이더</a>
+    </nav>
+    <div class="side-foot">
+      <svg class="moon" viewBox="0 0 48 48" aria-hidden="true"><path d="M30 6a18 18 0 1 0 12 30A16 16 0 0 1 30 6z" fill="#f3d98b"/></svg>
+      <div class="upd">시세 갱신<br><b id="mkAt">—</b></div>
+      <div class="dots">● ● ● ● ● ● ● ● ●</div>
+      <div class="theme" role="group" aria-label="화면 밝기">
+        <button data-t="light" title="밝게">☀</button>
+        <button data-t="dark" title="어둡게">☾</button>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main" id="top">
+    <section class="card hero sparkle">
+      <div class="trail"></div>
+      <div>
+        <div class="eyebrow">WELCOME · <span id="today"></span></div>
+        <h1>오늘의 흐름<em>watch the market</em></h1>
+        <div class="sum" id="summary">불러오는 중…</div>
+        <div class="note">깃허브가 30분마다 저절로 받아요 (컴퓨터를 꺼 둬도 돼요). 오르면 빨강, 내리면 파랑이에요. 시세는 15~20분 늦을 수 있어요.</div>
+        <div class="note stale" id="stale"></div>
+      </div>
+      <button class="btn" id="refresh">↻ 다시 불러오기</button>
+    </section>
+
+    <section class="tiles" id="tiles"></section>
+
+    <div class="sec-h" id="trend">
+      <div><span class="eyebrow">TRENDING NOW</span><h2>오늘의 이슈<em id="trCnt"></em></h2></div>
+      <div class="at" id="trAt"></div>
+    </div>
+    <section class="grid2">
+      <div class="card panel sparkle">
+        <div class="panel-h">
+          <div class="ic" style="background:var(--sky2)">🔍</div>
+          <div><h3>구글 인기 검색어<span class="badge">LIVE</span></h3><div class="sub">지금 검색이 몰리는 말과 관련 기사</div></div>
+          <div class="tabs" id="geoTabs"></div>
+        </div>
+        <div id="trends"></div>
+      </div>
+      <div class="card panel sparkle">
+        <div class="panel-h">
+          <div class="ic" style="background:#f5d6d6">▶</div>
+          <div><h3>유튜브 인기 급상승<span class="badge">KR</span></h3><div class="sub">한국 인기 동영상 순위</div></div>
+        </div>
+        <div class="scroll" id="yt"></div>
+      </div>
+    </section>
+
+    <div class="sec-h" id="market">
+      <div><span class="eyebrow">MARKETS</span><h2>환율 · 증시<em id="mkCnt"></em></h2></div>
+      <div class="at" id="mkAt2"></div>
+    </div>
+    <section class="mk" id="markets"></section>
+    <div class="foot">자료: Yahoo Finance · Google Trends · YouTube Data API</div>
+  </main>
+</div>
+
+<script>
+const TILE_KEYS = ["KRW=X","^KS11","^KQ11","^GSPC","^IXIC","BTC-USD"];
+const SUM_KEYS = [["^KS11","코스피"],["KRW=X","원달러"],["^IXIC","나스닥"]];
+let DATA = null, geo = null;
+
+// 밝기
+const root = document.documentElement;
+function setTheme(t){ root.dataset.theme = t; try{localStorage.setItem("theme",t)}catch(e){}
+  document.querySelectorAll(".theme button").forEach(b=>b.classList.toggle("on",b.dataset.t===t)); }
+let saved = null; try{saved = localStorage.getItem("theme")}catch(e){}
+setTheme(saved || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
+document.querySelectorAll(".theme button").forEach(b=>b.onclick=()=>setTheme(b.dataset.t));
+
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmt = (v,dp) => v==null ? "—" : Number(v).toLocaleString("ko-KR",{minimumFractionDigits:dp,maximumFractionDigits:dp});
+function chg(it){
+  if(it.price==null || !it.prev) return {cls:"flat",txt:"—",pct:0};
+  const d = it.price - it.prev, p = d / it.prev * 100;
+  const cls = Math.abs(p) < 0.005 ? "flat" : p > 0 ? "up" : "down";
+  const ar = cls==="up" ? "▲" : cls==="down" ? "▼" : "–";
+  return {cls, pct:p, txt:`${ar} ${fmt(Math.abs(d),it.dp)} (${p>0?"+":""}${p.toFixed(2)}%)`, short:`${ar} ${Math.abs(p).toFixed(2)}%`};
+}
+const price = it => (it.pre||"") + fmt(it.price,it.dp) + (it.suf||"");
+function spark(vals, cls, w, h){
+  if(!vals || vals.length < 2) return `<svg viewBox="0 0 ${w} ${h}"></svg>`;
+  const mn = Math.min(...vals), mx = Math.max(...vals), r = (mx-mn)||1;
+  const pts = vals.map((v,i)=>[i/(vals.length-1)*w, h-3-(v-mn)/r*(h-6)]);
+  const line = pts.map(p=>p.map(n=>n.toFixed(1)).join(",")).join(" ");
+  const id = "g"+Math.random().toString(36).slice(2,8);
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">
+    <defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--${cls})" stop-opacity=".22"/><stop offset="1" stop-color="var(--${cls})" stop-opacity="0"/></linearGradient></defs>
+    <polygon points="0,${h} ${line} ${w},${h}" fill="url(#${id})"/>
+    <polyline points="${line}" fill="none" stroke="var(--${cls})" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/></svg>`;
+}
+const allItems = () => (DATA.markets||[]).flatMap(g=>g.items);
+const find = t => allItems().find(i=>i.t===t);
+
+function render(){
+  const now = new Date();
+  document.getElementById("today").textContent = now.toLocaleDateString("ko-KR",{year:"numeric",month:"long",day:"numeric",weekday:"short"}).toUpperCase();
+  document.getElementById("mkAt").textContent = (DATA.markets_at||"—").slice(11,16) || "—";
+  document.getElementById("mkAt2").textContent = DATA.markets_at ? "최근 업데이트 " + DATA.markets_at : "";
+  document.getElementById("trAt").textContent = DATA.trends_at ? "최근 업데이트 " + DATA.trends_at : "";
+  const mAge = DATA.markets_at ? (now - new Date(DATA.markets_at.replace(" ","T")+"+09:00")) / 6e4 : 0;
+  document.getElementById("stale").textContent = mAge > 90
+    ? `⚠ 마지막으로 받은 지 ${mAge < 120 ? Math.round(mAge)+"분" : Math.round(mAge/60)+"시간"} 지났어요 — 깃허브 받기가 늦어지거나 멈췄어요` : "";
+
+  // 요약 한 줄
+  if(DATA.markets){
+    document.getElementById("summary").innerHTML = SUM_KEYS.map(([t,n])=>{
+      const it = find(t); if(!it) return ""; const c = chg(it);
+      return `${n} <span class="${c.cls}">${price(it)} ${c.short||""}</span>`;
+    }).filter(Boolean).join(" · ");
+  }
+
+  // 큰 칸
+  document.getElementById("tiles").innerHTML = TILE_KEYS.map(find).filter(Boolean).map(it=>{
+    const c = chg(it);
+    return `<div class="card tile"><div class="nm">${esc(it.name)}</div><div class="px">${price(it)}</div>
+      <div class="ch ${c.cls}">${c.txt}</div>${spark(it.spark,c.cls,160,34)}</div>`;
+  }).join("");
+
+  // 트렌드
+  const tr = DATA.trends || {};
+  const geos = Object.keys(tr);
+  if(!geo || !tr[geo]) geo = geos[0];
+  document.getElementById("geoTabs").innerHTML = geos.map(g=>`<button data-g="${g}" class="${g===geo?"on":""}">${esc(tr[g].label)}</button>`).join("");
+  document.querySelectorAll("#geoTabs button").forEach(b=>b.onclick=()=>{geo=b.dataset.g;render()});
+  const items = (tr[geo]||{}).items || [];
+  document.getElementById("navTrend").textContent = items.length || "";
+  document.getElementById("trCnt").textContent = items.length || "";
+  document.getElementById("trends").innerHTML = items.length ? items.map((it,i)=>{
+    const n = it.news[0];
+    return `<div class="tr"><div class="rank">${i+1}</div>
+      ${it.picture?`<img src="${esc(it.picture)}" alt="" loading="lazy" referrerpolicy="no-referrer">`:""}
+      <div style="min-width:0;flex:1"><div class="kw">${esc(it.title)}<small>${esc(it.pub)}</small></div>
+      ${n?`<div class="news"><a href="${esc(n.url)}" target="_blank" rel="noopener">${esc(n.title)}</a></div><div class="src">${esc(n.source)}${it.news.length>1?` 외 ${it.news.length-1}건`:""}</div>`:""}
+      </div><div class="traffic">${esc(it.traffic)}</div></div>`;
+  }).join("") : `<div class="empty">${esc((DATA.errors||{}).trends || "아직 받은 검색어가 없어요")}</div>`;
+
+  // 유튜브
+  const yt = DATA.youtube || {};
+  document.getElementById("yt").innerHTML = (yt.items||[]).length ? yt.items.map((v,i)=>`
+    <a class="yt" href="https://www.youtube.com/watch?v=${esc(v.id)}" target="_blank" rel="noopener">
+      <div class="rank">${i+1}</div><img src="${esc(v.thumb)}" alt="" loading="lazy">
+      <div style="min-width:0"><div class="t">${esc(v.title)}</div>
+      <div class="m">${esc(v.channel)} · 조회수 ${v.views.toLocaleString("ko-KR")}<b>${ago(v.published)}</b></div></div></a>`).join("")
+    : `<div class="empty">유튜브 순위를 보려면<br>깃허브 저장소 Settings → Secrets 에<br><code>YOUTUBE_API_KEY</code> 를 넣어 주세요.
+      ${yt.error && !yt.error.includes("비어") ? `<div class="err">${esc(yt.error)}</div>`:""}</div>`;
+
+  // 시세
+  const gs = DATA.markets || [];
+  document.getElementById("navMk").textContent = allItems().length || "";
+  document.getElementById("mkCnt").textContent = allItems().length || "";
+  document.getElementById("markets").innerHTML = gs.map(g=>`
+    <div class="card panel sparkle"><div class="panel-h"><div><span class="eyebrow">${esc(g.en)}</span><h3>${esc(g.title)}</h3></div></div>
+    ${g.items.map(it=>{ const c = chg(it); return `<div class="row">
+      <div><div class="nm">${esc(it.name)}</div><div class="tk">${esc(it.t)}${it.date?` · ${it.date}`:""}</div></div>
+      <div><div class="px">${it.error?"—":price(it)}</div><div class="ch ${c.cls}">${c.short||""}</div></div>
+      ${spark(it.spark,c.cls,78,30)}</div>`}).join("")}</div>`).join("")
+    || `<div class="card panel"><div class="empty">${esc((DATA.errors||{}).markets || "시세를 받는 중이에요")}</div></div>`;
+}
+function ago(iso){
+  const h = (Date.now() - new Date(iso)) / 36e5;
+  return h < 1 ? "방금" : h < 24 ? `${Math.floor(h)}시간 전` : `${Math.floor(h/24)}일 전`;
+}
+// 파일로 열어도 되게 data.js 를 <script> 로 다시 읽는다 (fetch 는 file:// 에서 막힘)
+function load(){
+  return new Promise(done=>{
+    const s = document.createElement("script");
+    s.src = "data.js?" + Date.now();
+    s.onload = ()=>{ s.remove(); if(window.DASH_DATA){ DATA = window.DASH_DATA; render(); } done(); };
+    s.onerror = ()=>{ s.remove(); document.getElementById("summary").textContent = "아직 받은 자료가 없어요 — 30분 안에 저절로 채워져요"; done(); };
+    document.head.appendChild(s);
+  });
+}
+document.getElementById("refresh").onclick = async e=>{
+  const b = e.currentTarget; b.disabled = true; b.textContent = "불러오는 중…";
+  await load(); b.disabled = false; b.textContent = "↻ 다시 불러오기";
+};
+load(); setInterval(load, 60000);
+</script>
+</body>
+</html>

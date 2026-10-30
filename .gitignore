@@ -1,0 +1,10 @@
+# 유튜브 키 — 절대 올리지 않음 (깃허브에선 Secrets 의 YOUTUBE_API_KEY)
+youtube_key.txt
+# 받은 자료는 gh-pages 가지에만
+data.json
+data.js
+radar/
+site/
+collect.log
+*.tmp
+__pycache__/
