@@ -243,7 +243,7 @@ def trends_due():
 
 if __name__ == "__main__":
     run("markets", fetch_markets)
-    if "--all" in sys.argv or trends_due():
+    if "--all" in sys.argv or trends_due() or "issues" not in DATA:  # 새 칸이 아직 없으면 바로 받기
         run("trends", fetch_trends)
         run("youtube", fetch_youtube)
         run("issues", fetch_issues)
