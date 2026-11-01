@@ -119,7 +119,7 @@
         </select>
         <select class="sel" id="chCat" aria-label="분야"><option value="all">분야 전체</option></select>
         <div class="chips" id="grades"></div>
-        <input class="search" id="chQ" type="search" placeholder="채널 이름 찾기">
+        <input class="search" id="chQ" type="search" placeholder="채널 이름·주제 찾기 (예: 캠핑)">
         <button class="chip" id="noNews">뉴스 빼기</button>
         <button class="chip" id="favOnly">★ 즐겨찾기만</button>
       </div>
@@ -151,7 +151,7 @@
       <div class="note" style="font-size:12.5px;color:var(--ink3)">인기 영상 제목에 여러 번 나온 말이에요. 누르면 위 「지금 뜨는 영상」에서 그 말이 든 영상만 보여요.</div>
       <div class="kws" id="kws"></div>
     </section>
-    <div class="foot">자료: YouTube Data API · 채널 목록은 분야별 인기 영상에서 저절로 모아요</div>
+    <div class="foot">자료: YouTube Data API · 채널 목록은 분야별 인기 영상과 주제 검색(키 안 쓰는 긁기)으로 저절로 모아요</div>
   </main>
 </div>
 
@@ -210,16 +210,32 @@ document.querySelectorAll("#grades button").forEach(b=>b.onclick=()=>{
   b.classList.toggle("on"); S.n = 50; render();
 });
 
+// 화면엔 눈여겨볼 채널만 오고, 찾기·즐겨찾기는 전체 목록(all.js)에서 — 무거워서 쓸 때만 받는다
+let ALL = null, allLoading = false;
+function loadAll(){
+  if(ALL || allLoading) return;
+  allLoading = true;
+  const s = document.createElement("script");
+  s.src = "radar/all.js?" + Date.now();
+  s.onload = ()=>{ s.remove(); allLoading = false; const A = window.RADAR_ALL;
+    if(A){ ALL = A.rows.map(r=>Object.fromEntries(A.f.map((k,i)=>[k, r[i]]))); delete window.RADAR_ALL; render(); } };
+  s.onerror = ()=>{ s.remove(); allLoading = false; };
+  document.head.appendChild(s);
+}
+
 function renderChannels(D){
   const p = S.p, gainKey = p, subKey = p==="w1" ? "sw1" : "s1";
   const ready = p==="subs" || D.channels.some(c=>c[p]!=null);
-  let list = D.channels.filter(c=>{
+  const wide = !!(S.q || S.fav);
+  if(wide) loadAll();
+  const pool = wide && ALL ? ALL.filter(c=>c.reg===reg) : D.channels;
+  let list = pool.filter(c=>{
     if(S.min > 0 && !(c.subs >= S.min)) return false;
     if(S.min < 0 && !(c.subs >= 0 && c.subs <= -S.min)) return false;
     if(S.cat!=="all" && !(c.cats||[]).includes(S.cat)) return false;
     if(S.noNews && (c.cats||[]).includes("25")) return false;
     if(S.grades.size && !S.grades.has(c.g)) return false;
-    if(S.q && !c.t.toLowerCase().includes(S.q)) return false;
+    if(S.q && !(c.t.toLowerCase().includes(S.q) || (c.k||"").toLowerCase().includes(S.q))) return false;
     if(S.fav && !favs.has(c.id)) return false;
     return true;
   });
@@ -227,8 +243,11 @@ function renderChannels(D){
   list.sort((a,b)=>key(b)-key(a));
   document.getElementById("chCnt").textContent = list.length.toLocaleString("ko-KR");
   const until = p==="w1" ? R.weekly_from : R.daily_from;
-  document.getElementById("chBanner").textContent = ready ? "" :
-    `기록 쌓는 중이에요 — ${p==="w1"?"주간":"일간"} 순위는 ${until} 이후 나와요. 지금은 구독자 순으로 보여요.`;
+  const n_all = (D.n_all ?? D.channels.length).toLocaleString("ko-KR");
+  document.getElementById("chBanner").textContent = !ready ?
+    `기록 쌓는 중이에요 — ${p==="w1"?"주간":"일간"} 순위는 ${until} 이후 나와요. 지금은 구독자 순으로 보여요.`
+    : wide ? (ALL ? `이 지역 채널 ${n_all}개 전체에서 찾았어요 — 이름·주제(찾은 검색어·영상 제목 낱말)로 찾아요` : "전체 채널 목록 받는 중…")
+    : D.n_all > D.channels.length ? `이 지역 채널 ${n_all}개 중 일간·주간·구독자·구독자 대비 순위 위쪽 ${D.channels.length.toLocaleString("ko-KR")}개만 보여요. 찾기를 쓰면 전체에서 찾아요.` : "";
   document.getElementById("chList").innerHTML = list.slice(0, S.n).map((c,i)=>{
     const g = ready && p!=="subs" ? c[gainKey] : null, sg = ready && p!=="subs" ? c[subKey] : null;
     const url = c.cu ? `https://www.youtube.com/${encodeURIComponent(c.cu)}` : `https://www.youtube.com/channel/${c.id}`;
@@ -267,7 +286,7 @@ function renderVideos(D){
     <a class="vc" href="https://www.youtube.com/watch?v=${esc(v.id)}" target="_blank" rel="noopener">
       <div class="im"><img src="${esc(v.th)}" alt="" loading="lazy">${v.dur!=null?`<span class="du">${dur(v.dur)}</span>`:""}</div>
       <div class="bd"><div class="t">${esc(v.t)}</div>
-        <div class="m">${esc(v.ch)} · 구독자 ${v.subs==null||v.subs<0?"—":kor(v.subs)}</div>
+        <div class="m">${esc(v.ch)} · 구독자 ${v.subs==null||v.subs<0?"—":kor(v.subs)}${v.src==="검색"?` · <span title="주제 검색으로 찾은 이번 주 영상">검색</span>`:""}</div>
         <div class="m">조회수 ${kor(v.v)} · ${ago(v.pub)}${v.x!=null?`<span class="x">${v.x>=10?Math.round(v.x):v.x}×</span>`:""}</div></div></a>`).join("")
     || `<div class="empty">조건에 맞는 영상이 없어요</div>`;
   document.getElementById("vMore").style.display = list.length > S.vn ? "" : "none";
@@ -299,17 +318,20 @@ function render(){
   document.getElementById("today").textContent = new Date().toLocaleDateString("ko-KR",{year:"numeric",month:"long",day:"numeric",weekday:"short"});
   document.getElementById("rdAt").textContent = R.at.slice(11);
   document.getElementById("navPool").textContent = R.pool.toLocaleString("ko-KR");
+  const bs = R.by_src || {}, num = n => (n||0).toLocaleString("ko-KR");
+  const stuck = R.find_blocked && (!R.find_at || R.find_blocked >= R.find_at);
   document.getElementById("summary").innerHTML =
-    `기록 중인 채널 <b>${R.pool.toLocaleString("ko-KR")}</b>개 · 마지막 기록 ${esc(R.at.slice(5))} · 오늘 쓴 유닛 ${R.units_today}`;
+    `기록 중인 채널 <b>${R.pool.toLocaleString("ko-KR")}</b>개 (인기 ${num(bs["인기"])} · 검색 ${num(bs["검색"])}) · 마지막 기록 ${esc(R.at.slice(5))} · 오늘 쓴 유닛 ${R.units_today}`
+    + (stuck ? ` · <b style="color:var(--up)">검색 찾기 막힘 ${esc(R.find_blocked.slice(5))}</b>` : "");
   document.getElementById("note").textContent =
-    `분야별 인기 영상에서 채널을 모아 3시간마다 조회수·구독자를 기록해요. 첫 기록 ${R.first.slice(5)} → 일간 순위 ${R.daily_from.slice(5)}부터, 주간 순위 ${R.weekly_from.slice(5)}부터.`;
+    `분야별 인기 영상과 주제 검색(이번 주 조회수순 — 키 안 씀)으로 채널을 모아 3시간마다 조회수·구독자를 기록해요. 첫 기록 ${R.first.slice(5)} → 일간 순위 ${R.daily_from.slice(5)}부터, 주간 순위 ${R.weekly_from.slice(5)}부터.`;
   renderChannels(D); renderVideos(D); renderKw(D);
 }
 
 function load(){
   const s = document.createElement("script");
   s.src = "radar/radar.js?" + Date.now();
-  s.onload = ()=>{ s.remove(); if(window.RADAR){ R = window.RADAR; render(); } };
+  s.onload = ()=>{ s.remove(); if(window.RADAR){ if(R && R.at !== window.RADAR.at) ALL = null; R = window.RADAR; render(); } };
   s.onerror = ()=>{ s.remove(); document.getElementById("summary").textContent = "아직 레이더 기록이 없어요 — 깃허브가 첫 기록을 하면 채워져요"; };
   document.head.appendChild(s);
 }

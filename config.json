@@ -3,9 +3,17 @@
   "trend_geos": [["KR", "한국"], ["US", "미국"]],
   "radar": {
     "snap_hours": 3,
-    "max_channels": 4000,
+    "max_channels": 15000,
     "regions": [["KR", "한국"], ["US", "해외(미국)"]],
-    "seed_channels": []
+    "seed_channels": [],
+    "find": {
+      "per_round": {"KR": 8, "US": 4}, "min_views": {"KR": 10000, "US": 30000},
+      "add_per_day": 2000, "auto_words": 30, "sleep": 1.2, "show_top": 1200, "hits_show": 800, "hits_keep": 20000,
+      "keywords": {
+        "KR": ["먹방", "요리", "레시피", "자취요리", "다이어트", "홈트", "헬스", "러닝", "등산", "캠핑", "차박", "낚시", "여행", "일본여행", "해외여행", "브이로그", "일상", "육아", "아기", "강아지", "고양이", "반려동물", "동물", "자동차", "신차", "중고차", "오토바이", "주식", "부동산", "재테크", "경제", "코인", "절약", "부업", "창업", "자영업", "장사", "직장인", "공무원", "군대", "학교", "고등학생", "대학생", "공부", "수능", "영어", "일본어", "과학", "역사", "우주", "미스터리", "공포", "괴담", "범죄", "사건", "썰", "사연", "연애", "결혼", "부부", "이혼", "시댁", "가족", "감동", "할머니", "건강", "의사", "병원", "음식", "맛집", "편의점", "다이소", "살림", "청소", "정리", "인테리어", "꿀팁", "생활꿀팁", "리뷰", "언박싱", "전자기기", "아이폰", "갤럭시", "AI", "챗GPT", "코딩", "게임", "롤", "배그", "마인크래프트", "로블록스", "모바일게임", "축구", "야구", "농구", "골프", "격투기", "복싱", "영화", "영화리뷰", "영화요약", "드라마", "드라마요약", "예능", "웹툰", "애니", "만화", "아이돌", "케이팝", "댄스", "노래", "커버", "연예인", "패션", "코디", "메이크업", "화장품", "피부", "헤어", "그림", "만들기", "DIY", "실험", "마술", "개그", "상황극", "몰래카메라", "챌린지", "밈", "웃긴영상", "ASMR", "시사", "북한", "국제", "일본", "중국", "미국", "전쟁", "무기", "밀리터리", "비행기", "기차", "건설", "공장", "장인", "노포", "시골", "농사", "귀농", "바다", "해산물", "시장", "길거리음식", "빵", "디저트", "카페", "술", "명언", "자기계발", "동기부여", "심리", "철학", "독서", "사주", "타로", "운세"],
+        "US": ["cooking", "recipe", "mukbang", "street food", "fitness", "workout", "weight loss", "camping", "fishing", "travel", "vlog", "family", "baby", "dog", "cat", "animals", "cars", "truck", "motorcycle", "stocks", "investing", "real estate", "money", "side hustle", "small business", "science", "history", "space", "mystery", "horror", "true crime", "storytime", "relationship", "wedding", "health", "doctor", "cleaning", "organizing", "home decor", "DIY", "life hacks", "review", "unboxing", "tech", "iphone", "AI", "coding", "gaming", "minecraft", "roblox", "fortnite", "football", "soccer", "basketball", "golf", "UFC", "boxing", "movie", "movie recap", "tv series", "anime", "kpop", "dance", "music cover", "celebrity", "fashion", "makeup", "skincare", "hair", "art", "drawing", "crafts", "experiment", "magic", "comedy", "prank", "challenge", "meme", "ASMR", "news", "politics", "military", "aviation", "construction", "factory", "farming", "ocean", "satisfying", "motivation", "psychology", "books"]
+      }
+    }
   },
   "groups": [
     {"id": "fx", "title": "환율", "en": "EXCHANGE", "items": [

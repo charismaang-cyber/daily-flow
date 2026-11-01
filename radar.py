@@ -3,9 +3,13 @@
    24시간·7일 증가량으로 순위를 매겨 radar/radar.js 에 쓴다. collect.py 가 부른다.
    유튜브는 '지금 값'만 주므로 기록이 쌓여야 순위가 생긴다:
      일간 = 12~48시간 떨어진 기록과 비교해 24시간치로 환산, 주간 = 4~10일 떨어진 기록으로 7일치 환산.
-   유닛: 인기 영상(분야 15 × 지역 2) ≈ 30 + 채널 50개당 1 → 4,000채널이면 한 번에 약 110"""
-import os, re, json, time, urllib.request, urllib.parse, urllib.error
+   유닛: 인기 영상(분야 15 × 지역 2) ≈ 30 + 채널 50개당 1 → 15,000채널이면 한 번에 약 330
+   채널 모으기는 두 길: ① 분야별 인기 영상(키) ② 주제 낱말로 '이번 주 조회수순' 검색을 긁기(키 안 씀, ytscrape.py, 30분마다 몇 개씩).
+   화면에는 지역마다 눈여겨볼 채널만 radar.js 에, 찾기·즐겨찾기용 전체 목록은 all.js 에 따로 쓴다."""
+import os, re, json, time, gzip, urllib.request, urllib.parse, urllib.error
+from collections import Counter
 from datetime import datetime, timezone, timedelta
+import ytscrape
 
 KST = timezone(timedelta(hours=9))
 API = "https://www.googleapis.com/youtube/v3/"
@@ -91,9 +95,9 @@ def series(h, days=14):
     return [round((b[1] - a[1]) * DAY / max(b[0] - a[0], 1)) for a, b in zip(pts, pts[1:])]
 
 def compact(h, now):
-    """48시간 안은 모두, 그 전은 하루 하나, 60일 넘은 건 버림"""
+    """48시간 안은 모두, 그 전은 하루 하나, 30일 넘은 건 버림 (채널이 많아져 기록 파일이 커지지 않게)"""
     recent = [e for e in h if now - e[0] <= 2 * DAY]
-    old = [e for e in h if 2 * DAY < now - e[0] <= 60 * DAY]
+    old = [e for e in h if 2 * DAY < now - e[0] <= 30 * DAY]
     return daily_points(old) + recent
 
 def grade(d1, subs):
@@ -105,16 +109,103 @@ def grade(d1, subs):
             return g
     return "F"
 
+# ── 기록 파일 (채널이 수만이라 gzip) ────────────────────────
+def load_state(rdir):
+    gz, old = os.path.join(rdir, "state.json.gz"), os.path.join(rdir, "state.json")
+    if os.path.exists(gz):
+        with gzip.open(gz, "rt", encoding="utf-8") as f:
+            return json.load(f)
+    return json.load(open(old, encoding="utf-8")) if os.path.exists(old) else {}
+
+def write(path, body, gz=False):
+    with (gzip.open(path + ".tmp", "wt", encoding="utf-8") if gz else open(path + ".tmp", "w", encoding="utf-8")) as f:
+        f.write(body)
+    os.replace(path + ".tmp", path)
+
+def save_state(rdir, st):
+    write(os.path.join(rdir, "state.json.gz"), json.dumps(st, ensure_ascii=False, separators=(",", ":")), gz=True)
+    old = os.path.join(rdir, "state.json")
+    if os.path.exists(old):
+        os.remove(old)  # 예전 형식
+
+# ── 키 없이 채널 찾기 ──────────────────────────────────
+def weekly_words(st, reg, n):
+    """최근 7일 인기 영상 제목에 2번 넘게 나온 낱말 — 정해 둔 주제 낱말 말고도 그때그때 뜨는 말로 찾게"""
+    cnt = Counter()
+    for d in sorted(st["kw"])[-7:]:
+        for _, toks in st["kw"][d].get(reg, {}).values():
+            cnt.update(toks)
+    return [w for w, c in cnt.most_common(n) if c >= 2]
+
+def discover(st, fc, regions, now, log):
+    """주제 낱말마다 '이번 주 조회수순'(전체·4분 미만) 검색 → 조회수가 넘는 영상의 채널을 pool 에 넣고 영상은 hits 에 남긴다"""
+    f, today = st["find"], kst(now).strftime("%Y-%m-%d")
+    added = f["added"] = {d: n for d, n in f.get("added", {}).items() if d >= kst(now - 3 * DAY).strftime("%Y-%m-%d")}
+    cur = f.setdefault("cur", {})
+    fails = new = seen = 0
+    for reg in regions:
+        words = list(dict.fromkeys(fc["keywords"].get(reg, []) + weekly_words(st, reg, fc.get("auto_words", 30))))
+        if not words:
+            continue
+        i, n = cur.get(reg, 0) % len(words), fc["per_round"].get(reg, 0)
+        for q in [words[(i + j) % len(words)] for j in range(min(n, len(words)))]:
+            for short in (False, True):
+                time.sleep(fc.get("sleep", 1.2))
+                try:
+                    hits = ytscrape.week_hits(q, reg, short)
+                    fails = 0
+                except ytscrape.Blocked as e:
+                    fails += 1
+                    if fails >= 3:
+                        f["blocked"] = now
+                        log(f"radar 찾기 막힘({e}) — 다음 회차에 다시")
+                        return
+                    continue
+                except Exception:
+                    continue
+                for h in hits:
+                    if h["v"] < fc["min_views"].get(reg, 10000) or not h["pub"]:
+                        continue
+                    seen += 1
+                    p = st["pool"].get(h["cid"])
+                    if p is None:
+                        if added.get(today, 0) >= fc["add_per_day"]:
+                            continue
+                        p = st["pool"][h["cid"]] = {"reg": reg, "add": now, "src": "검색"}
+                        added[today] = added.get(today, 0) + 1
+                        new += 1
+                    qs, tk = p.setdefault("q", []), p.setdefault("k", [])
+                    if q not in qs:
+                        qs.append(q); del qs[:-5]
+                    for w in sorted(tokens(h["t"])):
+                        if w not in tk:
+                            tk.append(w)
+                    del tk[:-12]
+                    old = st["hits"].get(h["id"], {})
+                    st["hits"][h["id"]] = {"cid": h["cid"], "t": h["t"], "ch": h["ch"], "v": max(h["v"], old.get("v", 0)),
+                                           "pub": old.get("pub") or h["pub"], "dur": h["dur"], "reg": old.get("reg", reg)}
+        cur[reg] = (i + n) % len(words)
+    cut = kst(now - 8 * DAY).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    hits = sorted(((k, h) for k, h in st["hits"].items() if h["pub"] >= cut), key=lambda kv: -kv[1]["v"])
+    st["hits"] = dict(hits[:fc.get("hits_keep", 20000)])
+    f["at"] = now
+    log(f"radar 찾기: 터진 영상 {seen}개, 새 채널 {new}개 (오늘 {added.get(today, 0)}/{fc['add_per_day']})")
+
 # ── 한 번 돌기 ────────────────────────────────────────
 def collect(out, key, cfg, log, force=False):
     rdir = os.path.join(out, "radar")
     os.makedirs(rdir, exist_ok=True)
-    sp = os.path.join(rdir, "state.json")
-    st = json.load(open(sp, encoding="utf-8")) if os.path.exists(sp) else {}
-    for k in ("pool", "hist", "kw", "units"):
+    st = load_state(rdir)
+    for k in ("pool", "hist", "kw", "units", "hits", "find"):
         st.setdefault(k, {})
     now = int(time.time() // 60)
+    if cfg.get("find"):
+        try:
+            discover(st, cfg["find"], [r for r, _ in cfg["regions"]], now, log)
+        except Exception as e:
+            log(f"radar 찾기 실패: {e}")
     if not force and st.get("last_snap") and now - st["last_snap"] < cfg["snap_hours"] * 60 - 15:
+        save_state(rdir, st)
         return
     regions = [r for r, _ in cfg["regions"]]
     today = kst(now).strftime("%Y-%m-%d")
@@ -178,14 +269,19 @@ def collect(out, key, cfg, log, force=False):
     for cid in [c for c, p in st["pool"].items() if c not in seen or p.get("t", "").endswith(" - Topic")]:  # 지워진·자동 채널
         st["pool"].pop(cid, None); st["hist"].pop(cid, None)
 
-    # 3) 너무 많으면 3일 넘게 지켜봐도 덜 크는 채널부터 뺀다
+    # 3) 너무 많으면 3일 넘게 지켜봐도 덜 크는 채널부터 뺀다 — 조회수 증가로도, 구독자 대비 증가로도 뒤처진 채널
+    #    (작은 채널이 빨리 크는 것도 남기려고 둘 중 나은 쪽 순위로 본다)
     over = len(st["pool"]) - cfg["max_channels"]
     if over > 0:
-        def rate(cid):
-            h = st["hist"][cid]
-            return (h[-1][1] - h[0][1]) / max(h[-1][0] - h[0][0], 1)
-        cands = sorted((c for c, p in st["pool"].items()
-                        if p.get("src") != "직접" and now - p["add"] > 3 * DAY), key=rate)
+        cands = [c for c, p in st["pool"].items() if p.get("src") != "직접" and now - p["add"] > 3 * DAY and c in st["hist"]]
+        ab = {}
+        for c in cands:
+            h = st["hist"][c]
+            ab[c] = (h[-1][1] - h[0][1]) / max(h[-1][0] - h[0][0], 1)
+        ra = {c: ab[c] / max(st["hist"][c][-1][2], 1000) for c in cands}
+        pct = lambda d: {c: i / max(len(d), 1) for i, c in enumerate(sorted(d, key=d.get))}
+        pa, pr = pct(ab), pct(ra)
+        cands.sort(key=lambda c: max(pa[c], pr[c]))
         for cid in cands[:over]:
             st["pool"].pop(cid); st["hist"].pop(cid, None)
 
@@ -196,7 +292,10 @@ def collect(out, key, cfg, log, force=False):
     st["kw"] = dict(sorted(st["kw"].items())[-8:])
 
     # 4) 화면에 줄 것
-    regs = {}
+    fc = cfg.get("find") or {}
+    half = fc.get("show_top", 1200) // 2
+    subs_of = {c: h[-1][2] for c, h in st["hist"].items()}
+    regs, every = {}, []
     for reg, label in cfg["regions"]:
         chans = []
         for cid, p in st["pool"].items():
@@ -207,12 +306,30 @@ def collect(out, key, cfg, log, force=False):
             w1, sw1 = gain(h, 7 * DAY, 4 * DAY, 10 * DAY, 7 * DAY)
             chans.append({"id": cid, "t": p.get("t", ""), "th": p.get("th", ""), "cu": p.get("cu", ""),
                           "c": p.get("c", ""), "pub": p.get("pub", ""), "src": p.get("src", ""),
-                          "cats": p.get("cats", []),
+                          "cats": p.get("cats", []), "k": " ".join(p.get("q", []) + p.get("k", [])),
                           "subs": h[-1][2], "views": h[-1][1], "n": h[-1][3],
                           "d1": d1, "s1": s1, "w1": w1, "sw1": sw1,
                           "g": grade(d1, h[-1][2]), "ser": series(h)})
-        subs_of = {c["id"]: c["subs"] for c in chans}
-        vids = sorted(videos.get(reg, {}).values(), key=lambda v: -v["v"])
+        every += [dict(c, reg=reg) for c in chans]
+        # 다 보내면 무거워서, 일간·주간·구독자·구독자 대비 증가 순위마다 위쪽만 (찾기·즐겨찾기는 all.js)
+        keep = {c["id"] for c in chans if c["src"] == "직접"}
+        for key in (lambda c: c["d1"], lambda c: c["w1"], lambda c: c["subs"],
+                    lambda c: c["d1"] / max(c["subs"], 1000) if c["d1"] is not None else None):
+            keep.update(c["id"] for c in sorted((c for c in chans if key(c) is not None), key=key, reverse=True)[:half])
+        n_all, chans = len(chans), [{k: v for k, v in c.items() if k != "k"} for c in chans if c["id"] in keep]
+        vids = list(videos.get(reg, {}).values())
+        # 검색으로 찾은 이번 주 영상 — 구독자 대비 많이 본 것 위주로
+        found = [{"id": vid, "t": h["t"], "ch": h["ch"], "cid": h["cid"], "cat": "",
+                  "th": f"https://i.ytimg.com/vi/{vid}/mqdefault.jpg", "v": h["v"], "lk": None, "cm": None,
+                  "pub": h["pub"], "dur": h["dur"], "src": "검색"}
+                 for vid, h in st["hits"].items() if h["reg"] == reg and vid not in videos.get(reg, {})]
+        rx = lambda v: v["v"] / subs_of[v["cid"]] if subs_of.get(v["cid"], 0) > 0 else 0
+        per = Counter()
+        for v in sorted(found, key=lambda v: (-rx(v), -v["v"])):
+            if per[v["cid"]] < 3 and sum(per.values()) < fc.get("hits_show", 800):  # 한 채널이 줄줄이 차지하지 않게
+                per[v["cid"]] += 1
+                vids.append(v)
+        vids.sort(key=lambda v: -v["v"])
         for v in vids:
             sb = subs_of.get(v["cid"])
             v["subs"] = sb
@@ -228,17 +345,20 @@ def collect(out, key, cfg, log, force=False):
                 c = cnt.setdefault(w, [0, 0])
                 c[0] += 1; c[1] += views
         kw = sorted(([w, n, vw] for w, (n, vw) in cnt.items() if n >= 2), key=lambda x: (-x[1], -x[2]))[:60]
-        regs[reg] = {"label": label, "channels": chans, "videos": vids, "kw": kw, "kw_days": len(week),
-                     "kw_videos": len(latest)}
+        regs[reg] = {"label": label, "channels": chans, "n_all": n_all, "videos": vids, "kw": kw,
+                     "kw_days": len(week), "kw_videos": len(latest)}
 
     fm = lambda m: kst(m).strftime("%Y-%m-%d %H:%M")
     radar = {"at": fm(now), "first": fm(st["first_snap"]), "daily_from": fm(st["first_snap"] + DAY // 2),
              "weekly_from": fm(st["first_snap"] + 4 * DAY), "units_today": st["units"][today],
-             "pool": len(st["pool"]), "cats": CATS, "regions": regs}
-    for path, body in ((sp, json.dumps(st, ensure_ascii=False, separators=(",", ":"))),
-                       (os.path.join(rdir, "radar.js"),
-                        "window.RADAR = " + json.dumps(radar, ensure_ascii=False, separators=(",", ":")) + ";\n")):
-        with open(path + ".tmp", "w", encoding="utf-8") as f:
-            f.write(body)
-        os.replace(path + ".tmp", path)
+             "pool": len(st["pool"]), "by_src": dict(Counter(p.get("src", "") for p in st["pool"].values())),
+             "find_at": fm(st["find"]["at"]) if st["find"].get("at") else None,
+             "find_blocked": fm(st["find"]["blocked"]) if st["find"].get("blocked") else None,
+             "cats": CATS, "regions": regs}
+    F = ["id", "t", "th", "cu", "c", "pub", "src", "cats", "k", "subs", "views", "n", "d1", "s1", "w1", "sw1", "g", "reg"]
+    allc = {"f": F, "rows": [[c[k] for k in F] for c in every]}
+    js = lambda name, obj: f"window.{name} = " + json.dumps(obj, ensure_ascii=False, separators=(",", ":")) + ";\n"
+    save_state(rdir, st)
+    write(os.path.join(rdir, "radar.js"), js("RADAR", radar))
+    write(os.path.join(rdir, "all.js"), js("RADAR_ALL", allc))
     log(f"radar 갱신 (채널 {len(st['pool'])}개, 이번 {used}유닛)")
