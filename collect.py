@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
-"""오늘의 흐름 — 시세(야후 파이낸스)·구글 트렌드·유튜브 인기 영상을 한 번 받아
-   data.json(보관용)과 data.js(화면이 읽는 것)에 쓰고, 때가 되면 채널 레이더(radar.py)도 돌린다.
+"""오늘의 흐름 — 시세(야후 파이낸스)·구글 트렌드·유튜브 인기 영상·이슈(issues.py: 네이트 키워드·많이 본 뉴스·
+   커뮤니티 인기글)를 한 번 받아 data.json(보관용)과 data.js(화면이 읽는 것)에 쓰고, 때가 되면 채널 레이더(radar.py)도 돌린다.
+   검색어는 받을 때마다 '24시간 모음'에 보태서, 한 번에 10개만 주는 구글·네이트도 하루치를 볼 수 있다.
    설정은 config.json. 깃허브 Actions 가 30분마다 부른다(.github/workflows/collect.yml).
    유튜브 키: 환경변수 YOUTUBE_API_KEY → 없으면 youtube_key.txt (저장소에 안 올림)
    사용: python collect.py [--out 폴더] [--all]
          --out  자료를 쓸 폴더 (기본: 이 폴더)   --all  이슈·레이더도 지금 받기"""
-import os, sys, json, warnings, urllib.request, urllib.parse
+import os, sys, json, time, warnings, urllib.request, urllib.parse
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone, timedelta
 from email.utils import parsedate_to_datetime
@@ -117,11 +118,25 @@ def fetch_markets():
     DATA["markets"] = groups
     DATA["markets_at"] = now_str()
 
+# ── 24시간 모음 ───────────────────────────────────────
+def roll(store, items, key, now, top=()):
+    """지금 목록을 모음에 보탠다 — f 처음 본 때, l 마지막 본 때(분), n 본 횟수, best 가장 높은 순위,
+       top 에 적은 칸은 가장 큰 값을 남긴다. 24시간 동안 다시 안 보이면 뺀다."""
+    for i, it in enumerate(items):
+        old = store.get(it[key], {})
+        e = dict(old, **it)
+        e.update(f=old.get("f", now), l=now, n=old.get("n", 0) + 1, best=min(old.get("best", 999), i + 1))
+        for k in top:
+            e[k] = max(old.get(k) or 0, it.get(k) or 0)
+        store[it[key]] = e
+    return {k: e for k, e in store.items() if now - e["l"] <= 1440}
+
 # ── 구글 트렌드 ────────────────────────────────────────
 NS = {"ht": "https://trends.google.com/trending/rss"}
 
 def fetch_trends():
-    out = {}
+    out, day = {}, DATA.setdefault("trend_day", {})
+    now = int(time.time() // 60)
     for geo, label in CFG["trend_geos"]:
         root = ET.fromstring(get(f"https://trends.google.com/trending/rss?geo={geo}"))
         items = []
@@ -135,29 +150,79 @@ def fetch_trends():
                 pub = parsedate_to_datetime(pub).astimezone(KST).strftime("%m-%d %H:%M")
             except Exception:
                 pass
-            items.append({"title": it.findtext("title", ""),
-                          "traffic": it.findtext("ht:approx_traffic", "", NS),
+            traffic = it.findtext("ht:approx_traffic", "", NS)
+            items.append({"title": it.findtext("title", ""), "traffic": traffic,
+                          "tn": int("".join(ch for ch in traffic if ch.isdigit()) or 0),
                           "picture": it.findtext("ht:picture", "", NS),
                           "pub": pub, "news": news[:3]})
         out[geo] = {"label": label, "items": items}
+        # 모음에는 기사 하나만 (자료가 너무 커지지 않게)
+        slim = [dict(it, news=it["news"][:1], nn=len(it["news"])) for it in items]
+        day[geo] = roll(day.get(geo, {}), slim, "title", now, top=("tn",))
     DATA["trends"] = out
     DATA["trends_at"] = now_str()
 
 # ── 유튜브 인기 급상승 ──────────────────────────────────
 def fetch_youtube():
+    """한국 인기 동영상 — 전체와 분야별로 50위씩 (한 번에 15유닛쯤, 하루 약 720)"""
     key = youtube_key()
     if not key:
         DATA["youtube"] = {"error": "유튜브 키가 없어요 (깃허브 Secrets 의 YOUTUBE_API_KEY)"}
         return
-    q = urllib.parse.urlencode({"part": "snippet,statistics", "chart": "mostPopular",
-                                "regionCode": "KR", "maxResults": 20, "key": key})
-    j = json.loads(get("https://www.googleapis.com/youtube/v3/videos?" + q))
-    vids = [{"id": v["id"], "title": v["snippet"]["title"],
-             "channel": v["snippet"]["channelTitle"],
-             "thumb": v["snippet"]["thumbnails"].get("medium", {}).get("url", ""),
-             "views": int(v.get("statistics", {}).get("viewCount", 0)),
-             "published": v["snippet"]["publishedAt"]} for v in j.get("items", [])]
-    DATA["youtube"] = {"items": vids, "at": now_str()}
+    import radar
+    items, lists = {}, {}
+    for cat in radar.CATS:
+        p = dict(part="snippet,statistics,contentDetails", chart="mostPopular", regionCode="KR",
+                 maxResults=50, key=key)
+        if cat != "0":
+            p["videoCategoryId"] = cat
+        try:
+            j = radar.yt("videos", **p)
+        except RuntimeError as e:
+            if cat == "0" or str(e) in ("quotaExceeded", "dailyLimitExceeded"):
+                raise
+            continue  # 한국에 없는 분야
+        vids = [v for v in j.get("items", []) if not v["snippet"]["channelTitle"].endswith(" - Topic")]  # 음악 자동 채널
+        for v in vids:
+            sn, s = v["snippet"], v.get("statistics", {})
+            items[v["id"]] = {"t": sn["title"], "ch": sn["channelTitle"], "v": int(s.get("viewCount", 0)),
+                              "pub": sn["publishedAt"],
+                              "dur": radar.iso_dur(v.get("contentDetails", {}).get("duration"))}
+        if vids:
+            lists[cat] = [v["id"] for v in vids]
+    DATA["youtube"] = {"items": items, "lists": lists, "cats": {c: radar.CATS[c] for c in lists}, "at": now_str()}
+
+# ── 네이트 키워드·많이 본 뉴스·커뮤니티 ─────────────────────
+def fetch_issues():
+    import issues
+    now = int(time.time() // 60)
+    iss = DATA.setdefault("issues", {})
+    errs = iss["errors"] = {}
+    def grab(name, fn):
+        try:
+            v = fn()
+            if not v:
+                raise RuntimeError("글을 못 찾았어요 (사이트 모양이 바뀐 듯)")
+            return v
+        except Exception as e:
+            errs[name] = str(e)[:120]
+            log(f"issues {name} 실패: {e}")
+    kw = grab("nate_kw", issues.nate_keywords)
+    if kw:
+        iss["nate_kw"] = kw
+        iss["nate_day"] = roll(iss.get("nate_day", {}), kw, "kw", now)
+    for name, fn in (("nate_news", issues.nate_news), ("naver_news", issues.naver_news)):
+        v = grab(name, fn)
+        if v:
+            iss[name] = v
+    comm = iss.setdefault("comm", {})
+    for cid, label, url, fn in issues.COMMUNITIES:
+        v = grab(cid, fn)
+        c = comm.setdefault(cid, {"items": []})
+        c.update(label=label, url=url)
+        if v:  # 막히면 지난번 것을 그대로 둔다
+            c.update(items=v[:50], at=now_str())
+    iss["at"] = now_str()
 
 # ── 한 번 받기 ────────────────────────────────────────
 def run(name, fn):
@@ -181,6 +246,7 @@ if __name__ == "__main__":
     if "--all" in sys.argv or trends_due():
         run("trends", fetch_trends)
         run("youtube", fetch_youtube)
+        run("issues", fetch_issues)
     save()
     if youtube_key():
         import radar

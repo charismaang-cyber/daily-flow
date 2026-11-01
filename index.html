@@ -30,6 +30,7 @@
       <a href="#trend">✧ 오늘의 이슈 <span class="cnt" id="navTrend"></span></a>
       <a href="#market">◔ 시세 <span class="cnt" id="navMk"></span></a>
       <a href="radar.html">◈ 채널 레이더</a>
+      <a href="keyword.html">⌕ 키워드 찾기</a>
       <a href="https://charismaang-cyber.github.io/yd-radar/">▣ 영드레이더 ↗</a>
     </nav>
     <div class="side-foot">
@@ -66,17 +67,52 @@
       <div class="card panel sparkle">
         <div class="panel-h">
           <div class="ic" style="background:var(--sky2)">🔍</div>
-          <div><h3>구글 인기 검색어<span class="badge">LIVE</span></h3><div class="sub">지금 검색이 몰리는 말과 관련 기사</div></div>
-          <div class="tabs" id="geoTabs"></div>
+          <div><h3>인기 검색어<span class="badge">LIVE</span></h3><div class="sub">한 번에 10개씩 오는 걸 24시간 동안 모아 둬요 · ⌕ 누르면 자동완성 키워드</div></div>
         </div>
-        <div id="trends"></div>
+        <div class="bar">
+          <div class="seg" id="kwSrc"></div>
+          <div class="seg" id="kwMode"><button data-v="day">24시간 모음</button><button data-v="now">지금 10개</button></div>
+          <span class="mini" id="kwInfo"></span>
+        </div>
+        <div class="scroll" id="trends"></div>
       </div>
       <div class="card panel sparkle">
         <div class="panel-h">
           <div class="ic" style="background:#f5d6d6">▶</div>
-          <div><h3>유튜브 인기 급상승<span class="badge">KR</span></h3><div class="sub">한국 인기 동영상 순위</div></div>
+          <div><h3>유튜브 인기 급상승<span class="badge">KR</span></h3><div class="sub">분야마다 50위까지 · 빠른 순 = 올린 뒤 시간당 조회수</div></div>
+        </div>
+        <div class="bar">
+          <div class="seg" id="ytSort"><button data-v="rank">순위</button><button data-v="speed">빠른 순</button></div>
+          <div class="chips" id="ytCats"></div>
         </div>
         <div class="scroll" id="yt"></div>
+      </div>
+    </section>
+    <section class="grid2">
+      <div class="card panel sparkle">
+        <div class="panel-h">
+          <div class="ic" style="background:#dbe7f5">📰</div>
+          <div><h3>많이 본 뉴스</h3><div class="sub">오늘 사람들이 가장 많이 본 기사 (네이버는 언론사마다 따로 매겨요)</div></div>
+        </div>
+        <div class="bar">
+          <div class="seg" id="newsSrc"><button data-v="nate">네이트 전체 순위</button><button data-v="naver">네이버 언론사별</button></div>
+          <span class="mini" id="newsInfo"></span>
+        </div>
+        <div class="err" id="newsErr"></div>
+        <div class="scroll" id="news"></div>
+      </div>
+      <div class="card panel sparkle">
+        <div class="panel-h">
+          <div class="ic" style="background:#e1efd9">💬</div>
+          <div><h3>커뮤니티 인기글</h3><div class="sub">썰·이슈 소재가 먼저 뜨는 곳 — 제목과 링크만 가져와요</div></div>
+        </div>
+        <div class="bar">
+          <div class="seg" id="cmSrc"></div>
+          <div class="seg" id="cmSort"><button data-v="site">사이트 순</button><button data-v="c">댓글순</button><button data-v="v">조회순</button></div>
+          <a class="mini" id="cmLink" target="_blank" rel="noopener"></a>
+        </div>
+        <div class="err" id="cmErr"></div>
+        <div class="scroll" id="comm"></div>
       </div>
     </section>
 
@@ -85,14 +121,24 @@
       <div class="at" id="mkAt2"></div>
     </div>
     <section class="mk" id="markets"></section>
-    <div class="foot">자료: Yahoo Finance · Google Trends · YouTube Data API</div>
+    <div class="foot">자료: Yahoo Finance · Google Trends · YouTube Data API · 네이트 · 네이버 뉴스 · 각 커뮤니티 (제목·링크만)</div>
   </main>
 </div>
 
 <script>
 const TILE_KEYS = ["KRW=X","^KS11","^KQ11","^GSPC","^IXIC","BTC-USD"];
 const SUM_KEYS = [["^KS11","코스피"],["KRW=X","원달러"],["^IXIC","나스닥"]];
-let DATA = null, geo = null;
+let DATA = null;
+// 칸마다 고른 것 (이 브라우저에만 기억)
+const UI = {kwSrc:"KR", kwMode:"day", ytCat:"0", ytSort:"rank", news:"nate", cm:"pann", cmSort:"site"};
+try{ Object.assign(UI, JSON.parse(localStorage.getItem("dash_ui")||"{}")) }catch(e){}
+function setUI(k, v){ UI[k] = v; try{localStorage.setItem("dash_ui", JSON.stringify(UI))}catch(e){} render(); }
+// .seg 단추 묶음: 고른 것 표시 + 누르면 바꾸기
+function seg(id, key, opts){
+  const el = document.getElementById(id);
+  if(opts) el.innerHTML = opts.map(([v,l,n])=>`<button data-v="${esc(v)}">${esc(l)}${n!=null?`<small>${n}</small>`:""}</button>`).join("");
+  el.querySelectorAll("button").forEach(b=>{ b.classList.toggle("on", b.dataset.v===UI[key]); b.onclick=()=>setUI(key, b.dataset.v); });
+}
 
 // 밝기
 const root = document.documentElement;
@@ -151,33 +197,10 @@ function render(){
       <div class="ch ${c.cls}">${c.txt}</div>${spark(it.spark,c.cls,160,34)}</div>`;
   }).join("");
 
-  // 트렌드
-  const tr = DATA.trends || {};
-  const geos = Object.keys(tr);
-  if(!geo || !tr[geo]) geo = geos[0];
-  document.getElementById("geoTabs").innerHTML = geos.map(g=>`<button data-g="${g}" class="${g===geo?"on":""}">${esc(tr[g].label)}</button>`).join("");
-  document.querySelectorAll("#geoTabs button").forEach(b=>b.onclick=()=>{geo=b.dataset.g;render()});
-  const items = (tr[geo]||{}).items || [];
-  document.getElementById("navTrend").textContent = items.length || "";
-  document.getElementById("trCnt").textContent = items.length || "";
-  document.getElementById("trends").innerHTML = items.length ? items.map((it,i)=>{
-    const n = it.news[0];
-    return `<div class="tr"><div class="rank">${i+1}</div>
-      ${it.picture?`<img src="${esc(it.picture)}" alt="" loading="lazy" referrerpolicy="no-referrer">`:""}
-      <div style="min-width:0;flex:1"><div class="kw">${esc(it.title)}<small>${esc(it.pub)}</small></div>
-      ${n?`<div class="news"><a href="${esc(n.url)}" target="_blank" rel="noopener">${esc(n.title)}</a></div><div class="src">${esc(n.source)}${it.news.length>1?` 외 ${it.news.length-1}건`:""}</div>`:""}
-      </div><div class="traffic">${esc(it.traffic)}</div></div>`;
-  }).join("") : `<div class="empty">${esc((DATA.errors||{}).trends || "아직 받은 검색어가 없어요")}</div>`;
-
-  // 유튜브
-  const yt = DATA.youtube || {};
-  document.getElementById("yt").innerHTML = (yt.items||[]).length ? yt.items.map((v,i)=>`
-    <a class="yt" href="https://www.youtube.com/watch?v=${esc(v.id)}" target="_blank" rel="noopener">
-      <div class="rank">${i+1}</div><img src="${esc(v.thumb)}" alt="" loading="lazy">
-      <div style="min-width:0"><div class="t">${esc(v.title)}</div>
-      <div class="m">${esc(v.channel)} · 조회수 ${v.views.toLocaleString("ko-KR")}<b>${ago(v.published)}</b></div></div></a>`).join("")
-    : `<div class="empty">유튜브 순위를 보려면<br>깃허브 저장소 Settings → Secrets 에<br><code>YOUTUBE_API_KEY</code> 를 넣어 주세요.
-      ${yt.error && !yt.error.includes("비어") ? `<div class="err">${esc(yt.error)}</div>`:""}</div>`;
+  renderKeywords();
+  renderYoutube();
+  renderNews();
+  renderComm();
 
   // 시세
   const gs = DATA.markets || [];
@@ -195,6 +218,132 @@ function ago(iso){
   const h = (Date.now() - new Date(iso)) / 36e5;
   return h < 1 ? "방금" : h < 24 ? `${Math.floor(h)}시간 전` : `${Math.floor(h/24)}일 전`;
 }
+// 1.2만 · 3.4억
+const kn = n => n==null ? "—" : n >= 1e8 ? (n/1e8).toFixed(1).replace(/\.0$/,"")+"억"
+  : n >= 1e4 ? (n/1e4).toFixed(n >= 1e5 ? 0 : 1).replace(/\.0$/,"")+"만" : Number(n).toLocaleString("ko-KR");
+const hm = m => new Date(m*6e4).toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit",hour12:false,timeZone:"Asia/Seoul"});
+const span = mins => mins < 60 ? "막 뜸" : mins < 1380 ? `${Math.round(mins/60)}시간째` : "하루 내내";
+const dur = s => s==null ? "" : s >= 3600 ? `${Math.floor(s/3600)}:${String(Math.floor(s%3600/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}` : `${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}`;
+const keyLink = w => `<a class="key" href="keyword.html?q=${encodeURIComponent(w)}" title="자동완성 키워드 보기">⌕</a>`;
+const ext = (u, inner) => `<a href="${esc(u)}" target="_blank" rel="noopener">${inner}</a>`;
+const naverSearch = w => "https://search.naver.com/search.naver?where=news&query=" + encodeURIComponent(w);
+const emptyBox = msg => `<div class="empty">${esc(msg)}</div>`;
+
+// 인기 검색어: 구글(한국·미국)·네이트, 지금 10개 / 24시간 모음
+function renderKeywords(){
+  const tr = DATA.trends || {}, day = DATA.trend_day || {}, iss = DATA.issues || {};
+  const srcs = Object.keys(tr).map(g=>[g, "구글 " + tr[g].label, Object.keys(day[g]||{}).length || null]);
+  if(iss.nate_kw) srcs.push(["nate", "네이트", Object.keys(iss.nate_day||{}).length || null]);
+  if(!srcs.some(s=>s[0]===UI.kwSrc) && srcs.length) UI.kwSrc = srcs[0][0];
+  seg("kwSrc", "kwSrc", srcs); seg("kwMode", "kwMode");
+  const isDay = UI.kwMode === "day", nate = UI.kwSrc === "nate";
+  let rows, html;
+  if(nate){
+    const nowSet = new Set((iss.nate_kw||[]).map(k=>k.kw));
+    rows = isDay ? Object.values(iss.nate_day||{}).sort((a,b)=>a.best-b.best || b.n-a.n) : (iss.nate_kw||[]);
+    html = rows.map((k,i)=>{
+      const mv = k.st==="new" ? `<span class="mv new">NEW</span>` : k.st==="up" ? `<span class="mv up">▲${k.ch||""}</span>` : k.st==="down" ? `<span class="mv down">▼${k.ch||""}</span>` : "";
+      const meta = isDay ? `처음 ${hm(k.f)} · ${span(k.l-k.f)} · 최고 ${k.best}위` : `지금 ${k.r}위`;
+      return `<div class="tr"><div class="rank">${i+1}</div><div style="min-width:0;flex:1">
+        <div class="kw">${ext(naverSearch(k.kw), esc(k.kw))}${isDay && nowSet.has(k.kw)?`<span class="nowb">지금</span>`:mv}${keyLink(k.kw)}</div>
+        <div class="src">${meta}</div></div></div>`;
+    }).join("");
+  } else {
+    const cur = (tr[UI.kwSrc]||{}).items || [];
+    const nowSet = new Set(cur.map(t=>t.title));
+    rows = isDay ? Object.values(day[UI.kwSrc]||{}).sort((a,b)=>(b.tn||0)-(a.tn||0) || b.l-a.l) : cur;
+    html = rows.map((it,i)=>{
+      const n = (it.news||[])[0], more = (it.nn || (it.news||[]).length) - 1;
+      const when = isDay ? `처음 ${hm(it.f)} · ${span(it.l-it.f)}` : esc(it.pub);
+      return `<div class="tr"><div class="rank">${i+1}</div>
+        ${it.picture?`<img src="${esc(it.picture)}" alt="" loading="lazy" referrerpolicy="no-referrer">`:""}
+        <div style="min-width:0;flex:1"><div class="kw">${esc(it.title)}${isDay && nowSet.has(it.title)?`<span class="nowb">지금</span>`:""}${keyLink(it.title)}<small>${when}</small></div>
+        ${n?`<div class="news">${ext(n.url, esc(n.title))}</div><div class="src">${esc(n.source)}${more>0?` 외 ${more}건`:""}</div>`:""}
+        </div><div class="traffic">${esc(it.traffic)}</div></div>`;
+    }).join("");
+  }
+  document.getElementById("kwInfo").textContent = rows.length ? (isDay ? `24시간 동안 ${rows.length}개` : `${rows.length}개`) : "";
+  document.getElementById("navTrend").textContent = Object.keys(day.KR||{}).length || "";
+  document.getElementById("trCnt").textContent = Object.keys(day.KR||{}).length || "";
+  document.getElementById("trends").innerHTML = html ||
+    emptyBox((DATA.errors||{}).trends || (iss.errors||{}).nate_kw || "아직 받은 검색어가 없어요");
+}
+
+// 유튜브 인기: 분야별 50위, 순위 / 빠른 순(시간당 조회수)
+function renderYoutube(){
+  const yt = DATA.youtube || {}, lists = yt.lists || {}, items = yt.items || {};
+  const el = document.getElementById("yt");
+  seg("ytSort", "ytSort");
+  if(!lists["0"]){
+    document.getElementById("ytCats").innerHTML = "";
+    el.innerHTML = `<div class="empty">유튜브 순위를 보려면<br>깃허브 저장소 Settings → Secrets 에<br><code>YOUTUBE_API_KEY</code> 를 넣어 주세요.
+      ${yt.error && !yt.error.includes("비어") ? `<div class="err">${esc(yt.error)}</div>`:""}</div>`;
+    return;
+  }
+  if(!lists[UI.ytCat]) UI.ytCat = "0";
+  const cats = document.getElementById("ytCats");
+  cats.innerHTML = Object.keys(lists).sort((a,b)=>+a-+b).map(c=>
+    `<button class="chip${c===UI.ytCat?" on":""}" data-c="${c}">${esc((yt.cats||{})[c]||c)}</button>`).join("");
+  cats.querySelectorAll(".chip").forEach(b=>b.onclick=()=>setUI("ytCat", b.dataset.c));
+  const vids = lists[UI.ytCat].map((id,i)=>{
+    const v = items[id] || {}, hrs = Math.max((Date.now() - new Date(v.pub)) / 36e5, 1);
+    return {id, r:i+1, ...v, sp: v.v / hrs};
+  });
+  if(UI.ytSort === "speed") vids.sort((a,b)=>b.sp-a.sp);
+  el.innerHTML = vids.map((v,i)=>`
+    <a class="yt" href="https://www.youtube.com/watch?v=${esc(v.id)}" target="_blank" rel="noopener">
+      <div class="rank">${i+1}</div>
+      <div class="th"><img src="https://i.ytimg.com/vi/${esc(v.id)}/mqdefault.jpg" alt="" loading="lazy">${v.dur!=null?`<span class="du">${dur(v.dur)}</span>`:""}</div>
+      <div style="min-width:0"><div class="t">${esc(v.t)}</div>
+      <div class="m">${esc(v.ch)} · 조회수 ${kn(v.v)}<b>${ago(v.pub)}</b><span class="sp">시간당 ${kn(Math.round(v.sp))}</span>${UI.ytSort==="speed"?` · 원래 ${v.r}위`:""}</div></div></a>`).join("");
+}
+
+// 많이 본 뉴스: 네이트 전체 1~50위 / 네이버 언론사별 1~3위
+function renderNews(){
+  const iss = DATA.issues || {}, errs = iss.errors || {};
+  seg("newsSrc", "news");
+  const el = document.getElementById("news"), info = document.getElementById("newsInfo");
+  if(UI.news === "naver"){
+    const ps = iss.naver_news || [];
+    info.textContent = ps.length ? `언론사 ${ps.length}곳` : "";
+    document.getElementById("newsErr").textContent = errs.naver_news ? "⚠ 이번에 못 받았어요: " + errs.naver_news : "";
+    el.innerHTML = ps.map(p=>`<div class="press"><h4>${esc(p.press)}</h4>${p.items.map((a,i)=>
+      `<a href="${esc(a.u)}" target="_blank" rel="noopener"><b>${i+1}</b><span>${esc(a.t)}</span><i>${esc(a.tm)}</i></a>`).join("")}</div>`).join("")
+      || emptyBox("아직 받은 뉴스가 없어요");
+  } else {
+    const ns = iss.nate_news || [];
+    info.textContent = ns.length ? `${ns.length}위까지` : "";
+    document.getElementById("newsErr").textContent = errs.nate_news ? "⚠ 이번에 못 받았어요: " + errs.nate_news : "";
+    el.innerHTML = ns.map(a=>{
+      const mv = a.mv==="up" ? `<span class="mv up">▲</span>` : a.mv==="down" ? `<span class="mv down">▼</span>` : a.mv==="new" ? `<span class="mv new">NEW</span>` : "";
+      return `<div class="ln"><div class="rank">${a.r}</div><div style="min-width:0">
+        <div class="t">${ext(a.u, esc(a.t))}</div><div class="m">${esc(a.src)}${mv}</div></div></div>`;
+    }).join("") || emptyBox("아직 받은 뉴스가 없어요");
+  }
+}
+
+// 커뮤니티 인기글
+function renderComm(){
+  const iss = DATA.issues || {}, comm = iss.comm || {}, errs = iss.errors || {};
+  const ids = Object.keys(comm);
+  if(!ids.length){ document.getElementById("comm").innerHTML = emptyBox("아직 받은 글이 없어요 — 30분 안에 채워져요"); return; }
+  if(!comm[UI.cm]) UI.cm = ids[0];
+  seg("cmSrc", "cm", ids.map(id=>[id, comm[id].label, comm[id].items.length || null]));
+  seg("cmSort", "cmSort");
+  const c = comm[UI.cm];
+  const link = document.getElementById("cmLink");
+  link.href = c.url; link.textContent = "사이트 열기 ↗";
+  document.getElementById("cmErr").textContent = errs[UI.cm]
+    ? `⚠ 이번에 못 받았어요 (${errs[UI.cm]})${c.items.length && c.at ? ` — ${c.at.slice(5,16)} 에 받은 글을 보여 줘요` : " — 사이트가 자동으로 받는 걸 막은 것 같아요"}` : "";
+  const posts = c.items.map((p,i)=>({...p, r:i+1}));
+  if(UI.cmSort !== "site") posts.sort((a,b)=>(b[UI.cmSort]||0)-(a[UI.cmSort]||0));
+  document.getElementById("comm").innerHTML = posts.map((p,i)=>{
+    const meta = [p.cat && `[${esc(p.cat)}]`, p.v!=null && `조회 ${kn(p.v)}`, p.c!=null && `댓글 ${kn(p.c)}`,
+                  p.rc!=null && `추천 ${kn(p.rc)}`, p.tm && esc(p.tm)].filter(Boolean).join(" · ");
+    return `<div class="ln"><div class="rank">${i+1}</div><div style="min-width:0">
+      <div class="t">${ext(p.u, esc(p.t))}</div><div class="m">${meta}</div></div></div>`;
+  }).join("") || emptyBox("받은 글이 없어요");
+}
 // 파일로 열어도 되게 data.js 를 <script> 로 다시 읽는다 (fetch 는 file:// 에서 막힘)
 function load(){
   return new Promise(done=>{
@@ -209,7 +358,7 @@ document.getElementById("refresh").onclick = async e=>{
   const b = e.currentTarget; b.disabled = true; b.textContent = "불러오는 중…";
   await load(); b.disabled = false; b.textContent = "↻ 다시 불러오기";
 };
-load(); setInterval(load, 60000);
+load(); setInterval(load, 3 * 60000);  // 자료는 30분마다 바뀌니 3분마다 보면 충분
 </script>
 </body>
 </html>

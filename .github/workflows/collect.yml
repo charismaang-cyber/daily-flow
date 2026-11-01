@@ -46,7 +46,7 @@ jobs:
           TZ: Asia/Seoul
         run: |
           publish() {
-            cp index.html radar.html style.css site/
+            cp index.html radar.html keyword.html style.css site/
             (
               cd site
               rm -rf .git
