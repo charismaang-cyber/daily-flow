@@ -216,6 +216,8 @@ def fetch_issues():
         if v:
             iss[name] = v
     comm = iss.setdefault("comm", {})
+    for cid in [c for c in comm if c not in {x[0] for x in issues.COMMUNITIES}]:
+        comm.pop(cid)  # 목록에서 뺀 사이트
     for cid, label, url, fn in issues.COMMUNITIES:
         v = grab(cid, fn)
         c = comm.setdefault(cid, {"items": []})

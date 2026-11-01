@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """오늘의 이슈 덧붙이기 — 네이트 실시간 이슈 키워드, 많이 본 뉴스(네이트 전체 순위·네이버 언론사별),
-   커뮤니티 인기글(네이트판·더쿠·디시 실베·에펨 포텐·루리웹) 제목과 링크만 받는다. collect.py 가 부른다.
+   커뮤니티 인기글(네이트판·더쿠·디시 실베·보배드림·루리웹·오유) 제목과 링크만 받는다. collect.py 가 부른다.
    사이트 모양이 바뀌거나 막히면 그 칸만 비고 나머지는 그대로 받는다(칸마다 error 에 까닭)."""
 import re, json, html, time, urllib.request
 
@@ -120,19 +120,36 @@ def dcbest():
                     "tm": text(find(r'<td class="gall_date"[^>]*>(.*?)</td>', row))})
     return out
 
-def fmkorea():
-    t = page("https://www.fmkorea.com/best2")
+# 에펨코리아는 깃허브에서 받으면 늘 HTTP 430 으로 막아서 뺐다 (11-01)
+def bobae():
+    t = page("https://www.bobaedream.co.kr/list?code=best")
     out = []
-    for li in re.split(r'<li class="li\s+li_best', t)[1:]:
-        srl = find(r"(?:document_srl=|/best2?/)(\d{6,})", li)
-        tt = text(find(r'<span class="ellipsis-target">(.*?)</span>', li))
-        if not (srl and tt):
+    for row in t.split('<tr itemscope itemtype="http://schema.org/Article">')[1:]:
+        row = row.split("</tr>")[0]
+        m = re.search(r'<a class="bsubject"[^>]*href="(/view\?code=best&No=\d+)[^"]*"[^>]*title="([^"]*)"', row)
+        if not m:
             continue
-        out.append({"t": tt, "u": f"https://www.fmkorea.com/{srl}",
-                    "cat": text(find(r'<span class="category">\s*<a[^>]*>(.*?)</a>', li)),
-                    "c": num(find(r'class="comment_count">\[(\d+)\]', li)),
-                    "rc": num(find(r'<span class="count">([\d,]+)</span>', li)),
-                    "tm": text(find(r'<span class="regdate">(.*?)<!--', li))})
+        out.append({"t": text(m.group(2)), "u": "https://www.bobaedream.co.kr" + m.group(1),
+                    "cat": text(find(r'<td class="category" title="([^"]*)"', row)),
+                    "c": num(find(r'class="totreply">(\d+)', row)),
+                    "rc": num(find(r'<td class="recomm">.*?>(\d+)<', row)),  # 앞의 글자색 #ff7234 를 피해서
+                    "v": num(find(r'<td class="count"[^>]*>([\d,]+)', row)),
+                    "tm": text(find(r'<td class="date"[^>]*>(.*?)</td>', row))})
+    return out
+
+def todayhumor():
+    t = page("https://www.todayhumor.co.kr/board/list.php?table=bestofbest")
+    out = []
+    for row in t.split('<tr class="view list_tr_')[1:]:
+        row = row.split("</tr>")[0]
+        m = re.search(r'<td class="subject"><a href="(/board/view\.php\?table=bestofbest&no=\d+)[^"]*"[^>]*>(.*?)</a>', row)
+        if not m:
+            continue
+        out.append({"t": text(m.group(2)), "u": "https://www.todayhumor.co.kr" + m.group(1),
+                    "c": num(find(r"list_memo_count_span'>\s*\[(\d+)\]", row)),
+                    "rc": num(find(r'<td class="oknok">([\d,]+)', row)),
+                    "v": num(find(r'<td class="hits">([\d,]+)', row)),
+                    "tm": text(find(r'<td class="date">(.*?)</td>', row))[-5:]})
     return out
 
 def ruliweb():
@@ -155,6 +172,7 @@ COMMUNITIES = [  # (id, 이름, 사이트 주소, 받는 함수)
     ("pann", "네이트판", "https://pann.nate.com/talk/ranking", pann),
     ("theqoo", "더쿠 HOT", "https://theqoo.net/hot", theqoo),
     ("dc", "디시 실베", "https://gall.dcinside.com/board/lists/?id=dcbest", dcbest),
-    ("fmk", "에펨 포텐", "https://www.fmkorea.com/best2", fmkorea),
+    ("bobae", "보배드림 베스트", "https://www.bobaedream.co.kr/list?code=best", bobae),
     ("ruli", "루리웹 유머", "https://bbs.ruliweb.com/best/humor_only?orderby=recommend&range=24h", ruliweb),
+    ("oyu", "오유 베오베", "https://www.todayhumor.co.kr/board/list.php?table=bestofbest", todayhumor),
 ]
